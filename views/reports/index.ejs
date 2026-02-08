@@ -1,0 +1,177 @@
+<%- include('../partials/header') %>
+
+    <div style="margin-top: 40px;">
+        <div style="display:flex; justify-content:space-between; align-items: center;">
+            <h1>Financial Reports</h1>
+            <form action="/reports" method="GET" style="display: flex; gap: 10px; align-items: center;">
+                <label style="color: var(--text-muted);">Year:</label>
+                <select name="year" onchange="this.form.submit()"
+                    style="background: var(--bg-card); color: white; border: 1px solid var(--border); padding: 8px; border-radius: 8px; cursor: pointer;">
+                    <% for(let y=new Date().getFullYear(); y>= 2020; y--) { %>
+                        <option value="<%= y %>" <%=currentYear==y ? 'selected' : '' %>><%= y %>
+                        </option>
+                        <% } %>
+                </select>
+            </form>
+        </div>
+
+        <!-- Summary Stats -->
+        <div class="dashboard-grid" style="margin-top: 30px;">
+            <div class="stat-card" style="border-top: 4px solid var(--success);">
+                <span class="stat-label">Total Income (<%= currentYear %>)</span>
+                <div class="stat-value" style="color: var(--success);">$<%= totalIncome.toLocaleString() %>
+                </div>
+            </div>
+            <div class="stat-card" style="border-top: 4px solid var(--danger);">
+                <span class="stat-label">Total Expenses (<%= currentYear %>)</span>
+                <div class="stat-value" style="color: var(--danger);">-$<%= totalExpense.toLocaleString() %>
+                </div>
+            </div>
+            <div class="stat-card" style="border-top: 4px solid var(--primary);">
+                <span class="stat-label">Net Savings</span>
+                <div class="stat-value">$<%= (totalIncome - totalExpense).toLocaleString() %>
+                </div>
+            </div>
+            <div class="stat-card" style="border-top: 4px solid #f59e0b;">
+                <span class="stat-label">Savings Rate</span>
+                <div class="stat-value" style="color: #f59e0b;">
+                    <%= totalIncome> 0 ? ((totalIncome - totalExpense) / totalIncome * 100).toFixed(1) : 0 %>%
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="dashboard-grid" style="margin-top: 30px;">
+            <div class="chart-container" style="grid-column: span 2;">
+                <h3>6-Month Financial Trend</h3>
+                <div class="chart-wrapper">
+                    <canvas id="trendChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Category breakdowns -->
+        <div class="dashboard-grid" style="margin-top: 30px;">
+            <div class="chart-container">
+                <h3>Expense Breakdown</h3>
+                <div class="chart-wrapper">
+                    <% if (totalExpense> 0) { %>
+                        <canvas id="expenseReportChart"></canvas>
+                        <% } else { %>
+                            <div
+                                style="height: 100%; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 0.9rem;">
+                                No Expense Transactions Found
+                            </div>
+                            <% } %>
+                </div>
+            </div>
+            <div class="chart-container">
+                <h3>Income Breakdown</h3>
+                <div class="chart-wrapper">
+                    <% if (totalIncome> 0) { %>
+                        <canvas id="incomeReportChart"></canvas>
+                        <% } else { %>
+                            <div
+                                style="height: 100%; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 0.9rem;">
+                                No Income Transactions Found
+                            </div>
+                            <% } %>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Data injection for Chart.js -->
+    <div id="reportData" data-months='<%- JSON.stringify(months) %>'
+        data-month-income='<%- JSON.stringify(monthIncome) %>' data-month-expense='<%- JSON.stringify(monthExpense) %>'
+        data-income-cats='<%- JSON.stringify(incomeCategories) %>'
+        data-expense-cats='<%- JSON.stringify(expenseCategories) %>'>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const dataEl = document.getElementById('reportData');
+            const months = JSON.parse(dataEl.dataset.months);
+            const monthIncome = JSON.parse(dataEl.dataset.monthIncome);
+            const monthExpense = JSON.parse(dataEl.dataset.monthExpense);
+            const incomeCats = JSON.parse(dataEl.dataset.incomeCats);
+            const expenseCats = JSON.parse(dataEl.dataset.expenseCats);
+
+            const commonOptions = {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom', labels: { color: '#94a3b8', font: { family: "'Outfit', sans-serif" } } }
+                }
+            };
+
+            // 1. Trend Chart (Line)
+            new Chart(document.getElementById('trendChart'), {
+                type: 'line',
+                data: {
+                    labels: months,
+                    datasets: [
+                        {
+                            label: 'Income',
+                            data: monthIncome,
+                            borderColor: '#10b981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        },
+                        {
+                            label: 'Expense',
+                            data: monthExpense,
+                            borderColor: '#ef4444',
+                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    ...commonOptions,
+                    scales: {
+                        y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
+                        x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
+                    }
+                }
+            });
+
+            // 2. Expense Breakdown (Doughnut)
+            const expCtx = document.getElementById('expenseReportChart');
+            if (expCtx) {
+                new Chart(expCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: Object.keys(expenseCats),
+                        datasets: [{
+                            data: Object.values(expenseCats),
+                            backgroundColor: ['#ef4444', '#f59e0b', '#3b82f6', '#8b5cf6', '#ec4899', '#06b6d4'],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: { ...commonOptions, cutout: '70%' }
+                });
+            }
+
+            // 3. Income Breakdown (Doughnut)
+            const incCtx = document.getElementById('incomeReportChart');
+            if (incCtx) {
+                new Chart(incCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: Object.keys(incomeCats),
+                        datasets: [{
+                            data: Object.values(incomeCats),
+                            backgroundColor: ['#10b981', '#3b82f6', '#8b5cf6', '#f59e0b', '#06b6d4'],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: { ...commonOptions, cutout: '70%' }
+                });
+            }
+        });
+    </script>
+
+    <%- include('../partials/footer') %>

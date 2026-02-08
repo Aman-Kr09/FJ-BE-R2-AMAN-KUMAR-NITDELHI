@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>
+        <%= title %> | FinanceTracker
+    </title>
+    <link rel="stylesheet" href="/css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body>
+    <div class="container">
+        <nav>
+            <a href="/" class="logo">FinanceTracker</a>
+            <div class="nav-links">
+                <% if (user) { %>
+                    <a href="/dashboard">Dashboard</a>
+                    <a href="/transactions">Transactions</a>
+                    <a href="/budgets">Budgets</a>
+                    <a href="/savings">Savings</a>
+                    <a href="/reports">Reports</a>
+                    <a href="/auth/logout" class="btn-outline">Logout</a>
+                    <% } else { %>
+                        <a href="/auth/login">Login</a>
+                        <a href="/auth/register" class="btn-primary">Get Started</a>
+                        <% } %>
+            </div>
+        </nav>
