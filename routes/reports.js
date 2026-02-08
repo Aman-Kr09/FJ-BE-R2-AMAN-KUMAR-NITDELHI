@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const { Transaction, Category } = require('../models');
 const { Op } = require('sequelize');
-const { convert } = require('../services/currencyService');
 
 const isAuth = (req, res, next) => req.isAuthenticated() ? next() : res.redirect('/auth/login');
 
@@ -10,7 +9,6 @@ router.get('/', isAuth, async (req, res) => {
     try {
         const { year } = req.query;
         const currentYear = parseInt(year) || new Date().getFullYear();
-        const userCurrency = req.user.currency || 'USD';
 
         // 1. Fetch current year transactions for category breakdown
         const transactions = await Transaction.findAll({
@@ -27,17 +25,17 @@ router.get('/', isAuth, async (req, res) => {
         const expenseCategories = {};
         const incomeCategories = {};
 
-        for (const t of transactions) {
-            const amtInUserCurrency = await convert(parseFloat(t.amount), t.currency || 'USD', userCurrency);
+        transactions.forEach(t => {
+            const amt = parseFloat(t.amount);
             const catName = t.Category ? t.Category.name : 'Uncategorized';
             if (t.type === 'income') {
-                totalIncome += amtInUserCurrency;
-                incomeCategories[catName] = (incomeCategories[catName] || 0) + amtInUserCurrency;
+                totalIncome += amt;
+                incomeCategories[catName] = (incomeCategories[catName] || 0) + amt;
             } else {
-                totalExpense += amtInUserCurrency;
-                expenseCategories[catName] = (expenseCategories[catName] || 0) + amtInUserCurrency;
+                totalExpense += amt;
+                expenseCategories[catName] = (expenseCategories[catName] || 0) + amt;
             }
-        }
+        });
 
         // 2. Fetch monthly trend for the last 6 months
         const sixMonthsAgo = new Date();
@@ -63,17 +61,8 @@ router.get('/', isAuth, async (req, res) => {
 
             months.push(m);
             const monthly = trendTransactions.filter(t => t.date.slice(0, 7) === yearMonth);
-
-            let mIncome = 0;
-            let mExpense = 0;
-            for (const t of monthly) {
-                const amt = await convert(parseFloat(t.amount), t.currency || 'USD', userCurrency);
-                if (t.type === 'income') mIncome += amt;
-                else mExpense += amt;
-            }
-
-            monthIncome.push(mIncome);
-            monthExpense.push(mExpense);
+            monthIncome.push(monthly.filter(t => t.type === 'income').reduce((s, t) => s + parseFloat(t.amount), 0));
+            monthExpense.push(monthly.filter(t => t.type === 'expense').reduce((s, t) => s + parseFloat(t.amount), 0));
         }
 
         res.render('reports/index', {
@@ -85,8 +74,7 @@ router.get('/', isAuth, async (req, res) => {
             months,
             monthIncome,
             monthExpense,
-            currentYear,
-            userCurrency
+            currentYear
         });
     } catch (err) {
         console.error(err);

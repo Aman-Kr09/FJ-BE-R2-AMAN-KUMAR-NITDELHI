@@ -1,191 +1,230 @@
 <%- include('partials/header') %>
 
     <div style="margin-top: 40px;">
-        <div style="display:flex; justify-content:space-between; align-items: center;">
-            <h1>Dashboard</h1>
-            <p style="color: var(--text-muted);">Welcome back, <%= user.name %>! Showing totals in <strong>
-                        <%= userCurrency %>
-                    </strong></p>
-        </div>
+        <h1>Welcome back, <%= user.name %>!</h1>
+        <p style="color: var(--text-muted);">Here's your financial summary.</p>
 
         <div class="dashboard-grid">
             <div class="stat-card">
-                <span class="stat-label">Monthly Savings</span>
-                <div class="stat-value">
-                    <%= userCurrency %>
-                        <%= savings.toLocaleString(undefined, {minimumFractionDigits: 2}) %>
+                <span class="stat-label">Total Balance</span>
+                <div class="stat-value">$<%= (totalIncome - totalExpense).toLocaleString() %>
                 </div>
             </div>
-            <div class="stat-card" style="border-top: 4px solid #f59e0b;">
-                <span class="stat-label">Total Savings</span>
-                <div class="stat-value" style="color: #f59e0b;">
-                    <%= userCurrency %>
-                        <%= totalSavingsCompiled.toLocaleString(undefined, {minimumFractionDigits: 2}) %>
+            <div class="stat-card">
+                <span class="stat-label">Income</span>
+                <div class="stat-value" style="color: var(--success);">+$<%= totalIncome.toLocaleString() %>
                 </div>
             </div>
             <div class="stat-card">
                 <span class="stat-label">Expenses</span>
-                <div class="stat-value" style="color: var(--danger);">
-                    <%= userCurrency %> -<%= totalExpense.toLocaleString(undefined, {minimumFractionDigits: 2}) %>
+                <div class="stat-value" style="color: var(--danger);">-$<%= totalExpense.toLocaleString() %>
                 </div>
             </div>
             <div class="stat-card" style="background: linear-gradient(135deg, var(--primary), #4338ca); color: white;">
-                <span class="stat-label" style="color: rgba(255,255,255,0.8);">Total Balance</span>
-                <div class="stat-value">
-                    <%= userCurrency %>
-                        <%= (totalIncome - totalExpense).toLocaleString(undefined, {minimumFractionDigits: 2}) %>
+                <span class="stat-label" style="color: rgba(255,255,255,0.8);">Total Savings</span>
+                <div class="stat-value">$<%= totalSavingsCompiled.toLocaleString() %>
                 </div>
             </div>
         </div>
 
-        <div class="dashboard-grid">
-            <div class="chart-container" style="grid-column: span 2;">
+        <div class="dashboard-grid" style="grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));">
+            <div class="chart-container">
+                <h3>Financial Overview</h3>
+                <div class="chart-wrapper">
+                    <canvas id="overviewChart"></canvas>
+                </div>
+            </div>
+            <div class="chart-container">
                 <h3>Spending by Category</h3>
                 <div class="chart-wrapper">
                     <canvas id="categoryChart"></canvas>
                 </div>
             </div>
-            <div class="stat-card">
-                <div style="display:flex; justify-content:space-between; align-items: center;">
-                    <h3>Budgets</h3>
-                    <a href="/budgets" style="font-size: 0.9rem; color: var(--primary);">Manage Budget</a>
+            <div class="chart-container">
+                <h3>Income by Category</h3>
+                <div class="chart-wrapper">
+                    <canvas id="incomeCategoryChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="dashboard-grid">
+            <div class="stat-card" style="grid-column: span 1.5;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h3>Budget Progress</h3>
+                    <a href="/budgets" class="btn-outline" style="padding: 5px 10px; font-size: 0.8rem;">+ Set
+                        Budget</a>
                 </div>
                 <div style="margin-top: 20px;">
-                    <div style="display:flex; justify-content:space-between; margin-bottom: 10px;">
-                        <span>Monthly Income:</span>
-                        <span style="color: var(--success); font-weight: 600;">
-                            <%= userCurrency %>
-                                <%= totalIncome.toLocaleString(undefined, {minimumFractionDigits: 2}) %>
-                        </span>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; margin-bottom: 10px;">
-                        <span>Monthly Expenses:</span>
-                        <span style="color: var(--danger); font-weight: 600;">
-                            <%= userCurrency %>
-                                <%= totalExpense.toLocaleString(undefined, {minimumFractionDigits: 2}) %>
-                        </span>
-                    </div>
-                    <hr style="border: 0; border-top: 1px solid var(--border); margin: 15px 0;">
                     <% if (budgetProgress && budgetProgress.length> 0) { %>
                         <% budgetProgress.forEach(b=> { %>
                             <div style="margin-bottom: 20px;">
-                                <div
-                                    style="display:flex; justify-content:space-between; margin-bottom: 8px; font-size: 0.9rem;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
                                     <span>
                                         <%= b.category %>
                                     </span>
-                                    <span>
-                                        <%= userCurrency %>
-                                            <%= b.spent.toLocaleString(undefined, {maximumFractionDigits: 0}) %> of <%=
-                                                    b.limit.toLocaleString() %>
-                                    </span>
+                                    <span>$<%= b.spent %> / $<%= b.limit %></span>
                                 </div>
                                 <div
                                     style="background: var(--bg-main); height: 8px; border-radius: 4px; overflow: hidden;">
-                                    <div
-                                        style="background: <%= b.percent > 90 ? 'var(--danger)' : 'var(--primary)' %>; width: <%= b.percent %>%; height: 100%; transition: 1s ease-out;">
-                                    </div>
+                                    <div class="progress-bar"
+                                        style="background: var(--primary); height: 100%; width: 0;"
+                                        data-percent="<%= b.percent %>"></div>
                                 </div>
                             </div>
                             <% }) %>
                                 <% } else { %>
-                                    <p
-                                        style="color: var(--text-muted); font-size: 0.9rem; text-align: center; margin-top: 20px;">
-                                        No budgets set for this month.</p>
+                                    <p style="color: var(--text-muted); margin-top: 10px;">No budgets set. <a
+                                            href="/budgets" style="color: var(--primary);">Set one now</a></p>
                                     <% } %>
                 </div>
             </div>
         </div>
 
-        <div style="margin-top: 40px;">
-            <div style="display:flex; justify-content:space-between; align-items: center; margin-bottom: 20px;">
+        <div class="table-container">
+            <div style="padding: 20px; display: flex; justify-content: space-between; align-items: center;">
                 <h3>Recent Transactions</h3>
-                <a href="/transactions" class="btn-outline" style="padding: 8px 16px; font-size: 0.9rem;">View All</a>
+                <a href="/transactions" class="btn-outline">View All</a>
             </div>
-            <div class="table-container">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>Category</th>
-                            <th>Description</th>
-                            <th>Amount</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <% if (recentTransactions && recentTransactions.length> 0) { %>
-                            <% recentTransactions.forEach(t=> { %>
-                                <tr>
-                                    <td>
-                                        <%= t.date %>
-                                    </td>
-                                    <td>
-                                        <%= t.Category ? t.Category.name : 'Other' %>
-                                    </td>
-                                    <td>
-                                        <%= t.description %>
-                                    </td>
-                                    <td class="type-<%= t.type %>">
-                                        <%= t.currency || 'USD' %>
-                                            <%= t.type==='income' ? '+' : '-' %>
-                                                <%= parseFloat(t.amount).toLocaleString() %>
-                                    </td>
-                                </tr>
-                                <% }) %>
-                                    <% } else { %>
-                                        <tr>
-                                            <td colspan="4" style="text-align: center; color: var(--text-muted);">No
-                                                transactions found</td>
-                                        </tr>
-                                        <% } %>
-                    </tbody>
-                </table>
-            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Category</th>
+                        <th>Remarks</th>
+                        <th>Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% if (recentTransactions && recentTransactions.length> 0) { %>
+                        <% recentTransactions.forEach(t=> { %>
+                            <tr>
+                                <td>
+                                    <%= t.date %>
+                                </td>
+                                <td>
+                                    <%= t.Category ? t.Category.name : 'Uncategorized' %>
+                                </td>
+                                <td>
+                                    <%= t.description %>
+                                </td>
+                                <td class="type-<%= t.type %>">
+                                    <%= t.type==='income' ? '+' : '-' %>$<%= t.amount %>
+                                </td>
+                            </tr>
+                            <% }) %>
+                                <% } else { %>
+                                    <tr>
+                                        <td colspan="4" style="text-align: center; color: var(--text-muted);">No recent
+                                            transactions</td>
+                                    </tr>
+                                    <% } %>
+                </tbody>
+            </table>
         </div>
     </div>
 
-    <!-- Pass data to JS for Chart -->
-    <div id="chartData" data-labels='<%= JSON.stringify(Object.keys(categoryData)) %>'
-        data-values='<%= JSON.stringify(Object.values(categoryData)) %>'>
+    <!-- Chart Data Storage -->
+    <div id="chartData" data-categories='<%- JSON.stringify(categoryData || {}) %>'
+        data-income-categories='<%- JSON.stringify(incomeCategoryData || {}) %>'
+        data-overview='<%- JSON.stringify({ income: totalIncome, expense: totalExpense, savings: savings }) %>'>
     </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            const dataEl = document.getElementById('chartData');
-            const labels = JSON.parse(dataEl.dataset.labels);
-            const values = JSON.parse(dataEl.dataset.values);
+            // Animate progress bars
+            document.querySelectorAll('.progress-bar').forEach(bar => {
+                const percent = bar.getAttribute('data-percent');
+                setTimeout(() => {
+                    bar.style.width = percent + '%';
+                    bar.style.transition = 'width 1s ease-in-out';
+                }, 100);
+            });
 
-            if (labels.length > 0) {
-                const ctx = document.getElementById('categoryChart').getContext('2d');
-                new Chart(ctx, {
+            const dataEl = document.getElementById('chartData');
+            const categoryData = JSON.parse(dataEl.getAttribute('data-categories'));
+            const incomeCategoryData = JSON.parse(dataEl.getAttribute('data-income-categories'));
+            const overview = JSON.parse(dataEl.getAttribute('data-overview'));
+
+            const commonOptions = {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { color: '#94a3b8', padding: 20, font: { family: 'Outfit', size: 12 } }
+                    }
+                }
+            };
+
+            // Overview Bar Chart
+            new Chart(document.getElementById('overviewChart').getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: ['Income', 'Expenses', 'Savings'],
+                    datasets: [{
+                        label: 'Amount ($)',
+                        data: [overview.income, overview.expense, overview.savings],
+                        backgroundColor: ['#10b981', '#ef4444', '#6366f1'],
+                        borderRadius: 8
+                    }]
+                },
+                options: {
+                    ...commonOptions,
+                    plugins: { ...commonOptions.plugins, legend: { display: false } },
+                    scales: {
+                        y: { grid: { color: '#1e293b' }, ticks: { color: '#94a3b8' } },
+                        x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
+                    }
+                }
+            });
+
+            // Spending Doughnut
+            if (Object.keys(categoryData).length > 0) {
+                new Chart(document.getElementById('categoryChart').getContext('2d'), {
                     type: 'doughnut',
                     data: {
-                        labels: labels,
+                        labels: Object.keys(categoryData),
                         datasets: [{
-                            data: values,
-                            backgroundColor: [
-                                '#6366f1', '#10b981', '#ef4444', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4'
-                            ],
-                            borderWidth: 0
+                            data: Object.values(categoryData),
+                            backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'],
+                            borderWidth: 0,
+                            hoverOffset: 10
                         }]
                     },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                position: 'right',
-                                labels: {
-                                    color: '#94a3b8',
-                                    font: { family: "'Outfit', sans-serif" }
-                                }
-                            }
-                        },
-                        cutout: '70%'
-                    }
+                    options: { ...commonOptions, cutout: '70%' }
                 });
             } else {
-                document.querySelector('.chart-wrapper').innerHTML = '<p style="color: var(--text-muted); text-align: center; margin-top: 100px;">No expense data available for chart</p>';
+                showPlaceholder('categoryChart', 'No spending data yet');
+            }
+
+            // Income Doughnut
+            if (Object.keys(incomeCategoryData).length > 0) {
+                new Chart(document.getElementById('incomeCategoryChart').getContext('2d'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: Object.keys(incomeCategoryData),
+                        datasets: [{
+                            data: Object.values(incomeCategoryData),
+                            backgroundColor: ['#10b981', '#34d399', '#6ee7b7', '#a7f3d0', '#059669'],
+                            borderWidth: 0,
+                            hoverOffset: 10
+                        }]
+                    },
+                    options: { ...commonOptions, cutout: '70%' }
+                });
+            } else {
+                showPlaceholder('incomeCategoryChart', 'No income data yet');
+            }
+
+            function showPlaceholder(id, msg) {
+                const canvas = document.getElementById(id);
+                const wrapper = canvas.parentElement;
+                const placeholder = document.createElement('div');
+                placeholder.style.cssText = 'height:100%; display:flex; align-items:center; justify-content:center; color:var(--text-muted);';
+                placeholder.innerHTML = `<p>${msg}</p>`;
+                canvas.style.display = 'none';
+                wrapper.appendChild(placeholder);
             }
         });
     </script>
