@@ -86,13 +86,14 @@ router.post('/add', isAuth, upload.single('receipt'), async (req, res) => {
 
 router.put('/update', isAuth, upload.single('receipt'), async (req, res) => {
     try {
-        const { id, amount, type, date, description, categoryId } = req.body;
+        const { id, amount, type, date, description, categoryId, currency } = req.body;
         const updateData = {
             amount: parseFloat(amount),
             type,
             date,
             description,
-            categoryId
+            categoryId,
+            currency
         };
 
         if (req.file) {

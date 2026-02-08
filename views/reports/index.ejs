@@ -19,17 +19,22 @@
         <div class="dashboard-grid" style="margin-top: 30px;">
             <div class="stat-card" style="border-top: 4px solid var(--success);">
                 <span class="stat-label">Total Income (<%= currentYear %>)</span>
-                <div class="stat-value" style="color: var(--success);">$<%= totalIncome.toLocaleString() %>
+                <div class="stat-value" style="color: var(--success); text-transform: uppercase;">
+                    <%= userCurrency %>
+                        <%= totalIncome.toLocaleString() %>
                 </div>
             </div>
             <div class="stat-card" style="border-top: 4px solid var(--danger);">
                 <span class="stat-label">Total Expenses (<%= currentYear %>)</span>
-                <div class="stat-value" style="color: var(--danger);">-$<%= totalExpense.toLocaleString() %>
+                <div class="stat-value" style="color: var(--danger); text-transform: uppercase;">-<%= userCurrency %>
+                        <%= totalExpense.toLocaleString() %>
                 </div>
             </div>
             <div class="stat-card" style="border-top: 4px solid var(--primary);">
                 <span class="stat-label">Net Savings</span>
-                <div class="stat-value">$<%= (totalIncome - totalExpense).toLocaleString() %>
+                <div class="stat-value" style="text-transform: uppercase;">
+                    <%= userCurrency %>
+                        <%= (totalIncome - totalExpense).toLocaleString() %>
                 </div>
             </div>
             <div class="stat-card" style="border-top: 4px solid #f59e0b;">

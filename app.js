@@ -53,6 +53,8 @@ const budgetRouter = require('./routes/budgets');
 const reportRouter = require('./routes/reports');
 const categoryRouter = require('./routes/categories');
 const savingsRouter = require('./routes/savings');
+const userRouter = require('./routes/user');
+const calculatorRouter = require('./routes/calculator');
 
 app.use('/auth', authRouter);
 app.use('/dashboard', dashboardRouter);
@@ -61,6 +63,8 @@ app.use('/budgets', budgetRouter);
 app.use('/reports', reportRouter);
 app.use('/categories', categoryRouter);
 app.use('/savings', savingsRouter);
+app.use('/user', userRouter);
+app.use('/calculator', calculatorRouter);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 app.get('/', (req, res) => {
