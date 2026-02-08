@@ -115,8 +115,15 @@
                             <% }) %>
                                 <% } else { %>
                                     <tr>
-                                        <td colspan="4" style="text-align: center; color: var(--text-muted);">No recent
-                                            transactions</td>
+                                        <td colspan="4"
+                                            style="text-align: center; padding: 30px; color: var(--text-muted);">
+                                            <div
+                                                style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+                                                <i data-lucide="receipt"
+                                                    style="width: 32px; height: 32px; opacity: 0.5;"></i>
+                                                <p>No recent transactions</p>
+                                            </div>
+                                        </td>
                                     </tr>
                                     <% } %>
                 </tbody>

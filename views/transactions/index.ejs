@@ -21,46 +21,61 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <% transactions.forEach(t=> { %><tr>
-                            <td>
-                                <%= t.date %>
-                            </td>
-                            <td>
-                                <%= t.Category ? t.Category.name : 'Other' %>
-                            </td>
-                            <td>
-                                <%= t.description || '-' %>
-                            </td>
-                            <td class="type-<%= t.type %>">
-                                $<%= t.amount %>
-                                    <% if (t.receiptUrl) { %>
-                                        <div style="margin-top: 4px;">
-                                            <a href="<%= t.receiptUrl %>" target="_blank"
-                                                style="font-size: 0.7rem; color: var(--primary); text-decoration: none;">📄
-                                                View Receipt</a>
-                                        </div>
-                                        <% } %>
-                            </td>
-                            <td>
-                                <div style="display: flex; gap: 10px;">
-                                    <button class="btn-outline edit-btn" style="padding: 5px 10px; font-size: 0.8rem;"
-                                        data-id="<%= t.id %>" data-type="<%= t.type %>"
-                                        data-category="<%= t.categoryId %>" data-amount="<%= t.amount %>"
-                                        data-description="<%= t.description %>" data-date="<%= t.date %>"
-                                        data-receipt="<%= t.receiptUrl || '' %>">
-                                        Edit
-                                    </button>
-                                    <form action="/transactions/<%= t.id %>?_method=DELETE" method="POST"
-                                        onsubmit="return confirm('Are you sure?')">
-                                        <button type="submit" class="btn-outline"
-                                            style="padding: 5px 10px; font-size: 0.8rem; border-color: var(--danger); color: var(--danger);">
-                                            Delete
+                    <% if (transactions && transactions.length> 0) { %>
+                        <% transactions.forEach(t=> { %>
+                            <tr>
+                                <td>
+                                    <%= t.date %>
+                                </td>
+                                <td>
+                                    <%= t.Category ? t.Category.name : 'Other' %>
+                                </td>
+                                <td>
+                                    <%= t.description || '-' %>
+                                </td>
+                                <td class="type-<%= t.type %>">
+                                    $<%= t.amount %>
+                                        <% if (t.receiptUrl) { %>
+                                            <div style="margin-top: 4px;">
+                                                <a href="<%= t.receiptUrl %>" target="_blank"
+                                                    style="font-size: 0.7rem; color: var(--primary); text-decoration: none;">📄
+                                                    View Receipt</a>
+                                            </div>
+                                            <% } %>
+                                </td>
+                                <td>
+                                    <div style="display: flex; gap: 10px;">
+                                        <button class="btn-outline edit-btn"
+                                            style="padding: 5px 10px; font-size: 0.8rem;" data-id="<%= t.id %>"
+                                            data-type="<%= t.type %>" data-category="<%= t.categoryId %>"
+                                            data-amount="<%= t.amount %>" data-description="<%= t.description %>"
+                                            data-date="<%= t.date %>" data-receipt="<%= t.receiptUrl || '' %>">
+                                            Edit
                                         </button>
-                                    </form>
-                                </div>
-                            </td>
-                        </tr>
-                        <% }) %>
+                                        <form action="/transactions/<%= t.id %>?_method=DELETE" method="POST"
+                                            onsubmit="return confirm('Are you sure?')">
+                                            <button type="submit" class="btn-outline"
+                                                style="padding: 5px 10px; font-size: 0.8rem; border-color: var(--danger); color: var(--danger);">
+                                                Delete
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            <% }) %>
+                                <% } else { %>
+                                    <tr>
+                                        <td colspan="5"
+                                            style="text-align: center; padding: 40px; color: var(--text-muted);">
+                                            <div
+                                                style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
+                                                <i data-lucide="receipt"
+                                                    style="width: 40px; height: 40px; opacity: 0.5;"></i>
+                                                <p>No transactions found. Click "Add Transaction" to get started!</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <% } %>
                 </tbody>
             </table>
         </div>

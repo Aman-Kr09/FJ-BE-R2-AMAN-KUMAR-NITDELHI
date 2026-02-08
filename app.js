@@ -64,6 +64,9 @@ app.use('/savings', savingsRouter);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 app.get('/', (req, res) => {
+    if (req.isAuthenticated()) {
+        return res.redirect('/dashboard');
+    }
     res.render('index', { title: 'Personal Finance Tracker' });
 });
 

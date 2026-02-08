@@ -15,7 +15,7 @@
 <body>
     <div class="container">
         <nav>
-            <a href="/" class="logo">FinanceTracker</a>
+            <a href="<%= user ? '/dashboard' : '/' %>" class="logo">FinanceTracker</a>
             <div class="nav-links">
                 <% if (user) { %>
                     <a href="/dashboard">Dashboard</a>

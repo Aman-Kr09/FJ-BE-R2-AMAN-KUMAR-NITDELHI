@@ -51,8 +51,14 @@
                             </div>
                             <% }) %>
                                 <% } else { %>
-                                    <p style="color: var(--text-muted); text-align: center; padding: 40px 0;">Currently,
-                                        there are no budgets set.</p>
+                                    <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+                                        <div
+                                            style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
+                                            <i data-lucide="piggy-bank"
+                                                style="width: 40px; height: 40px; opacity: 0.5;"></i>
+                                            <p>No budgets set yet. Start by setting your first budget!</p>
+                                        </div>
+                                    </div>
                                     <% } %>
                 </div>
             </div>
