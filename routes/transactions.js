@@ -84,18 +84,29 @@ router.post('/add', isAuth, upload.single('receipt'), async (req, res) => {
     }
 });
 
-router.put('/update', isAuth, async (req, res) => {
-    const { id, amount, type, date, description, categoryId } = req.body;
-    await Transaction.update({
-        amount: parseFloat(amount),
-        type,
-        date,
-        description,
-        categoryId
-    }, {
-        where: { id, userId: req.user.id }
-    });
-    res.redirect('/transactions');
+router.put('/update', isAuth, upload.single('receipt'), async (req, res) => {
+    try {
+        const { id, amount, type, date, description, categoryId } = req.body;
+        const updateData = {
+            amount: parseFloat(amount),
+            type,
+            date,
+            description,
+            categoryId
+        };
+
+        if (req.file) {
+            updateData.receiptUrl = `/uploads/${req.file.filename}`;
+        }
+
+        await Transaction.update(updateData, {
+            where: { id, userId: req.user.id }
+        });
+        res.redirect('/transactions');
+    } catch (err) {
+        console.error(err);
+        res.redirect('/transactions');
+    }
 });
 
 router.delete('/:id', isAuth, async (req, res) => {
