@@ -6,23 +6,30 @@
 
         <div class="dashboard-grid">
             <div class="stat-card">
-                <span class="stat-label">Total Balance</span>
-                <div class="stat-value">$<%= (totalIncome - totalExpense).toLocaleString() %>
+                <span class="stat-label">Monthly Savings</span>
+                <div class="stat-value">
+                    <%= userCurrency %>
+                        <%= savings.toLocaleString(undefined, {minimumFractionDigits: 2}) %>
                 </div>
             </div>
-            <div class="stat-card">
-                <span class="stat-label">Income</span>
-                <div class="stat-value" style="color: var(--success);">+$<%= totalIncome.toLocaleString() %>
+            <div class="stat-card" style="border-top: 4px solid #f59e0b;">
+                <span class="stat-label">Total Savings</span>
+                <div class="stat-value" style="color: #f59e0b;">
+                    <%= userCurrency %>
+                        <%= totalSavingsCompiled.toLocaleString(undefined, {minimumFractionDigits: 2}) %>
                 </div>
             </div>
             <div class="stat-card">
                 <span class="stat-label">Expenses</span>
-                <div class="stat-value" style="color: var(--danger);">-$<%= totalExpense.toLocaleString() %>
+                <div class="stat-value" style="color: var(--danger);">
+                    <%= userCurrency %> -<%= totalExpense.toLocaleString(undefined, {minimumFractionDigits: 2}) %>
                 </div>
             </div>
             <div class="stat-card" style="background: linear-gradient(135deg, var(--primary), #4338ca); color: white;">
-                <span class="stat-label" style="color: rgba(255,255,255,0.8);">Total Savings</span>
-                <div class="stat-value">$<%= totalSavingsCompiled.toLocaleString() %>
+                <span class="stat-label" style="color: rgba(255,255,255,0.8);">Total Balance</span>
+                <div class="stat-value">
+                    <%= userCurrency %>
+                        <%= (totalIncome - totalExpense).toLocaleString(undefined, {minimumFractionDigits: 2}) %>
                 </div>
             </div>
         </div>
@@ -56,6 +63,20 @@
                         Budget</a>
                 </div>
                 <div style="margin-top: 20px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom: 10px;">
+                        <span>Income:</span>
+                        <span style="color: var(--success); font-weight: 600;">
+                            <%= userCurrency %>
+                                <%= totalIncome.toLocaleString(undefined, {minimumFractionDigits: 2}) %>
+                        </span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom: 10px;">
+                        <span>Expenses:</span>
+                        <span style="color: var(--danger); font-weight: 600;">
+                            <%= userCurrency %>
+                                <%= totalExpense.toLocaleString(undefined, {minimumFractionDigits: 2}) %>
+                        </span>
+                    </div>
                     <% if (budgetProgress && budgetProgress.length> 0) { %>
                         <% budgetProgress.forEach(b=> { %>
                             <div style="margin-bottom: 20px;">
@@ -63,7 +84,12 @@
                                     <span>
                                         <%= b.category %>
                                     </span>
-                                    <span>$<%= b.spent %> / $<%= b.limit %></span>
+                                    <span>
+                                        <%= userCurrency %>
+                                            <%= b.spent.toLocaleString(undefined, {maximumFractionDigits: 0}) %> of <%=
+                                                    userCurrency %>
+                                                    <%= b.limit.toLocaleString(undefined, {minimumFractionDigits: 2}) %>
+                                    </span>
                                 </div>
                                 <div
                                     style="background: var(--bg-main); height: 8px; border-radius: 4px; overflow: hidden;">
@@ -109,7 +135,9 @@
                                     <%= t.description %>
                                 </td>
                                 <td class="type-<%= t.type %>">
-                                    <%= t.type==='income' ? '+' : '-' %>$<%= t.amount %>
+                                    <%= t.currency || userCurrency %>
+                                        <%= t.type==='income' ? '+' : '-' %>
+                                            <%= t.amount.toLocaleString(undefined, {minimumFractionDigits: 2}) %>
                                 </td>
                             </tr>
                             <% }) %>
