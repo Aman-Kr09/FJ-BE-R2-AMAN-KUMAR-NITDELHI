@@ -10,6 +10,18 @@
     <link rel="stylesheet" href="/css/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        .currency-select {
+            background: var(--bg-card);
+            color: white;
+            border: 1px solid var(--border);
+            padding: 5px 10px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            margin-right: 15px;
+        }
+    </style>
 </head>
 
 <body>
@@ -18,6 +30,15 @@
             <a href="<%= user ? '/dashboard' : '/' %>" class="logo">FinanceTracker</a>
             <div class="nav-links">
                 <% if (user) { %>
+                    <form action="/user/update-currency" method="POST" style="display:inline;">
+                        <select name="currency" class="currency-select" onchange="this.form.submit()">
+                            <option value="USD" <%=user.currency==='USD' ? 'selected' : '' %>>USD $</option>
+                            <option value="INR" <%=user.currency==='INR' ? 'selected' : '' %>>INR ₹</option>
+                            <option value="EUR" <%=user.currency==='EUR' ? 'selected' : '' %>>EUR €</option>
+                            <option value="GBP" <%=user.currency==='GBP' ? 'selected' : '' %>>GBP £</option>
+                            <option value="JPY" <%=user.currency==='JPY' ? 'selected' : '' %>>JPY ¥</option>
+                        </select>
+                    </form>
                     <a href="/dashboard">Dashboard</a>
                     <a href="/transactions">Transactions</a>
                     <a href="/budgets">Budgets</a>

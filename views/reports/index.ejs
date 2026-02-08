@@ -1,41 +1,44 @@
 <%- include('../partials/header') %>
-
     <div style="margin-top: 40px;">
         <div style="display:flex; justify-content:space-between; align-items: center;">
             <h1>Financial Reports</h1>
-            <form action="/reports" method="GET" style="display: flex; gap: 10px; align-items: center;">
-                <label style="color: var(--text-muted);">Year:</label>
-                <select name="year" onchange="this.form.submit()"
-                    style="background: var(--bg-card); color: white; border: 1px solid var(--border); padding: 8px; border-radius: 8px; cursor: pointer;">
-                    <% for(let y=new Date().getFullYear(); y>= 2020; y--) { %>
-                        <option value="<%= y %>" <%=currentYear==y ? 'selected' : '' %>><%= y %>
-                        </option>
-                        <% } %>
-                </select>
-            </form>
+            <div style="display: flex; gap: 20px; align-items: center;">
+                <span style="color: var(--text-muted);">Showing in <strong>
+                        <%= userCurrency %>
+                    </strong></span>
+                <form action="/reports" method="GET" style="display: flex; gap: 10px; align-items: center;">
+                    <label style="color: var(--text-muted);">Year:</label>
+                    <select name="year" onchange="this.form.submit()"
+                        style="background: var(--bg-card); color: white; border: 1px solid var(--border); padding: 8px; border-radius: 8px; cursor: pointer;">
+                        <% for(let y=new Date().getFullYear(); y>= 2020; y--) { %>
+                            <option value="<%= y %>" <%=currentYear==y ? 'selected' : '' %>><%= y %>
+                            </option>
+                            <% } %>
+                    </select>
+                </form>
+            </div>
         </div>
 
         <!-- Summary Stats -->
-        <div class="dashboard-grid" style="margin-top: 30px;">
+        <div class="dashboard-grid" style="margin-top: 20px;">
             <div class="stat-card" style="border-top: 4px solid var(--success);">
                 <span class="stat-label">Total Income (<%= currentYear %>)</span>
-                <div class="stat-value" style="color: var(--success);">$<%= totalIncome.toLocaleString() %>
+                <div class="stat-value" style="color: var(--success);">
+                    <%= userCurrency %>
+                        <%= totalIncome.toLocaleString(undefined, {minimumFractionDigits: 2}) %>
                 </div>
             </div>
             <div class="stat-card" style="border-top: 4px solid var(--danger);">
                 <span class="stat-label">Total Expenses (<%= currentYear %>)</span>
-                <div class="stat-value" style="color: var(--danger);">-$<%= totalExpense.toLocaleString() %>
+                <div class="stat-value" style="color: var(--danger);">-<%= userCurrency %>
+                        <%= totalExpense.toLocaleString(undefined, {minimumFractionDigits: 2}) %>
                 </div>
             </div>
             <div class="stat-card" style="border-top: 4px solid var(--primary);">
-                <span class="stat-label">Net Savings</span>
-                <div class="stat-value">$<%= (totalIncome - totalExpense).toLocaleString() %>
-                </div>
-            </div>
-            <div class="stat-card" style="border-top: 4px solid #f59e0b;">
-                <span class="stat-label">Savings Rate</span>
-                <div class="stat-value" style="color: #f59e0b;">
-                    <%= totalIncome> 0 ? ((totalIncome - totalExpense) / totalIncome * 100).toFixed(1) : 0 %>%
+                <span class="stat-label">Net Balance</span>
+                <div class="stat-value">
+                    <%= userCurrency %>
+                        <%= (totalIncome - totalExpense).toLocaleString(undefined, {minimumFractionDigits: 2}) %>
                 </div>
             </div>
         </div>
@@ -43,39 +46,24 @@
         <!-- Charts Row -->
         <div class="dashboard-grid" style="margin-top: 30px;">
             <div class="chart-container" style="grid-column: span 2;">
-                <h3>6-Month Financial Trend</h3>
+                <h3>6-Month Financial Trend (<%= userCurrency %>)</h3>
                 <div class="chart-wrapper">
                     <canvas id="trendChart"></canvas>
                 </div>
             </div>
         </div>
 
-        <!-- Category breakdowns -->
         <div class="dashboard-grid" style="margin-top: 30px;">
             <div class="chart-container">
-                <h3>Expense Breakdown</h3>
+                <h3>Expenses by Category</h3>
                 <div class="chart-wrapper">
-                    <% if (totalExpense> 0) { %>
-                        <canvas id="expenseReportChart"></canvas>
-                        <% } else { %>
-                            <div
-                                style="height: 100%; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 0.9rem;">
-                                No Expense Transactions Found
-                            </div>
-                            <% } %>
+                    <canvas id="expenseCatChart"></canvas>
                 </div>
             </div>
             <div class="chart-container">
-                <h3>Income Breakdown</h3>
+                <h3>Income by Category</h3>
                 <div class="chart-wrapper">
-                    <% if (totalIncome> 0) { %>
-                        <canvas id="incomeReportChart"></canvas>
-                        <% } else { %>
-                            <div
-                                style="height: 100%; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 0.9rem;">
-                                No Income Transactions Found
-                            </div>
-                            <% } %>
+                    <canvas id="incomeCatChart"></canvas>
                 </div>
             </div>
         </div>
@@ -85,28 +73,44 @@
     <div id="reportData" data-months='<%- JSON.stringify(months) %>'
         data-month-income='<%- JSON.stringify(monthIncome) %>' data-month-expense='<%- JSON.stringify(monthExpense) %>'
         data-income-cats='<%- JSON.stringify(incomeCategories) %>'
-        data-expense-cats='<%- JSON.stringify(expenseCategories) %>'>
+        data-expense-cats='<%- JSON.stringify(expenseCategories) %>' data-currency='<%= userCurrency %>'>
     </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
             const dataEl = document.getElementById('reportData');
             const months = JSON.parse(dataEl.dataset.months);
             const monthIncome = JSON.parse(dataEl.dataset.monthIncome);
             const monthExpense = JSON.parse(dataEl.dataset.monthExpense);
             const incomeCats = JSON.parse(dataEl.dataset.incomeCats);
             const expenseCats = JSON.parse(dataEl.dataset.expenseCats);
+            const userCurrency = dataEl.dataset.currency;
 
             const commonOptions = {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: { position: 'bottom', labels: { color: '#94a3b8', font: { family: "'Outfit', sans-serif" } } }
+                    legend: { position: 'bottom', labels: { color: '#94a3b8', font: { family: "'Outfit', sans-serif" } } },
+                    tooltip: {
+                        callbacks: {
+                            label: function (context) {
+                                let label = context.dataset.label || '';
+                                if (label) label += ': ';
+                                if (context.parsed.y !== null) {
+                                    label += userCurrency + ' ' + context.parsed.y.toLocaleString();
+                                } else {
+                                    label += userCurrency + ' ' + context.parsed.toLocaleString();
+                                }
+                                return label;
+                            }
+                        }
+                    }
                 }
             };
 
-            // 1. Trend Chart (Line)
-            new Chart(document.getElementById('trendChart'), {
+            // 6-Month Trend Chart
+            new Chart(document.getElementById('trendChart').getContext('2d'), {
                 type: 'line',
                 data: {
                     labels: months,
@@ -132,16 +136,15 @@
                 options: {
                     ...commonOptions,
                     scales: {
-                        y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
+                        y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8' } },
                         x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
                     }
                 }
             });
 
-            // 2. Expense Breakdown (Doughnut)
-            const expCtx = document.getElementById('expenseReportChart');
-            if (expCtx) {
-                new Chart(expCtx, {
+            // Expense Category Chart
+            if (Object.keys(expenseCats).length > 0) {
+                new Chart(document.getElementById('expenseCatChart').getContext('2d'), {
                     type: 'doughnut',
                     data: {
                         labels: Object.keys(expenseCats),
@@ -155,10 +158,9 @@
                 });
             }
 
-            // 3. Income Breakdown (Doughnut)
-            const incCtx = document.getElementById('incomeReportChart');
-            if (incCtx) {
-                new Chart(incCtx, {
+            // Income Category Chart
+            if (Object.keys(incomeCats).length > 0) {
+                new Chart(document.getElementById('incomeCatChart').getContext('2d'), {
                     type: 'doughnut',
                     data: {
                         labels: Object.keys(incomeCats),
@@ -173,5 +175,4 @@
             }
         });
     </script>
-
     <%- include('../partials/footer') %>
