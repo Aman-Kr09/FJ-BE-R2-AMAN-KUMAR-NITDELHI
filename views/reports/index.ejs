@@ -56,14 +56,28 @@
         <div class="dashboard-grid" style="margin-top: 30px;">
             <div class="chart-container">
                 <h3>Expenses by Category</h3>
-                <div class="chart-wrapper">
-                    <canvas id="expenseCatChart"></canvas>
+                <div class="chart-wrapper" style="position: relative;">
+                    <% if (Object.keys(expenseCategories).length> 0) { %>
+                        <canvas id="expenseCatChart"></canvas>
+                        <% } else { %>
+                            <div
+                                style="display: flex; height: 100%; align-items: center; justify-content: center; color: var(--text-muted); font-style: italic;">
+                                Currently no records
+                            </div>
+                            <% } %>
                 </div>
             </div>
             <div class="chart-container">
                 <h3>Income by Category</h3>
-                <div class="chart-wrapper">
-                    <canvas id="incomeCatChart"></canvas>
+                <div class="chart-wrapper" style="position: relative;">
+                    <% if (Object.keys(incomeCategories).length> 0) { %>
+                        <canvas id="incomeCatChart"></canvas>
+                        <% } else { %>
+                            <div
+                                style="display: flex; height: 100%; align-items: center; justify-content: center; color: var(--text-muted); font-style: italic;">
+                                Currently no records
+                            </div>
+                            <% } %>
                 </div>
             </div>
         </div>

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { Budget, Category } = require('../models');
 const { convert } = require('../services/currencyService');
+const { sendBudgetUpdate } = require('../services/emailService');
 
 const isAuth = (req, res, next) => req.isAuthenticated() ? next() : res.redirect('/auth/login');
 
@@ -62,6 +63,11 @@ router.post('/add', isAuth, async (req, res) => {
                 description
             });
         }
+
+        // Send confirmation email
+        const category = await Category.findByPk(categoryId);
+        await sendBudgetUpdate(req.user.email, category.name, parseFloat(amount), userCurrency);
+
         res.redirect('/budgets');
     } catch (err) {
         console.error(err);
@@ -82,6 +88,11 @@ router.put('/update', isAuth, async (req, res) => {
         }, {
             where: { id, userId: req.user.id }
         });
+
+        // Send confirmation email
+        const category = await Category.findByPk(categoryId);
+        await sendBudgetUpdate(req.user.email, category.name, parseFloat(amount), userCurrency);
+
         res.redirect('/budgets');
     } catch (err) {
         console.error(err);

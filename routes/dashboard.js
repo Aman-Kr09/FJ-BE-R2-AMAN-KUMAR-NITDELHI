@@ -52,8 +52,12 @@ router.get('/', isAuth, async (req, res) => {
 
         // Parallelize budget progress calculations
         const budgetProgress = await Promise.all(budgets.map(async (b) => {
-            const spentTransactions = monthlyTransactions.filter(t => t.type === 'expense' && t.categoryId === b.categoryId);
-            const spent = spentTransactions.reduce((acc, t) => acc + t.amtInUserCurrency, 0);
+            const categoryTransactions = monthlyTransactions.filter(t => t.categoryId === b.categoryId);
+
+            // Net spent = Expenses - Incomes (Refunds/Vouchers)
+            const spent = categoryTransactions.reduce((acc, t) => {
+                return t.type === 'expense' ? acc + t.amtInUserCurrency : acc - t.amtInUserCurrency;
+            }, 0);
 
             // Convert budget limit (stored in USD) to user currency
             const limitInUserCurrency = await convert(parseFloat(b.amount), 'USD', userCurrency);

@@ -5,7 +5,7 @@ const { Op } = require('sequelize');
 const multer = require('multer');
 const path = require('path');
 const { convert } = require('../services/currencyService');
-const { sendBudgetAlert } = require('../services/emailService');
+const { sendBudgetAlert, sendTransactionBudgetUpdate } = require('../services/emailService');
 
 const isAuth = (req, res, next) => req.isAuthenticated() ? next() : res.redirect('/auth/login');
 
@@ -67,48 +67,45 @@ router.post('/add', isAuth, upload.single('receipt'), async (req, res) => {
         });
 
         // Budget Overrun Check (Only for Expenses)
-        if (type === 'expense' && categoryId) {
-            const budget = await Budget.findOne({ where: { userId: req.user.id, categoryId } });
-            if (budget) {
-                const now = new Date(date);
-                const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-                const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        // Budget Tracking & Notifications (Runs if a budget exists for this category)
+        const budget = await Budget.findOne({ where: { userId: req.user.id, categoryId } });
+        if (budget) {
+            const now = new Date(date);
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
-                const currentMonthExpenses = await Transaction.findAll({
-                    where: {
-                        userId: req.user.id,
-                        categoryId,
-                        type: 'expense',
-                        date: { [Op.between]: [startOfMonth.toISOString().split('T')[0], endOfMonth.toISOString().split('T')[0]] }
-                    }
-                });
-
-                // Convert all category expenses to USD to compare with budget.amount (which is in USD)
-                const convertedExpenses = await Promise.all(currentMonthExpenses.map(async (t) => {
-                    return await convert(parseFloat(t.amount), t.currency || 'USD', 'USD');
-                }));
-
-                const totalSpentUsd = convertedExpenses.reduce((acc, val) => acc + val, 0);
-
-                if (totalSpentUsd > parseFloat(budget.amount)) {
-                    const category = await Category.findByPk(categoryId);
-                    const userCurrency = req.user.currency || 'USD';
-
-                    // Convert USD values to User Currency for display in the email
-                    const limitInUserCurrency = await convert(parseFloat(budget.amount), 'USD', userCurrency);
-                    const spentInUserCurrency = await convert(totalSpentUsd, 'USD', userCurrency);
-
-                    console.log(`Alert: Budget exceeded for ${category.name}. Limit: ${limitInUserCurrency}, Spent: ${spentInUserCurrency}`);
-
-                    // Send Email Alert
-                    await sendBudgetAlert(
-                        req.user.email,
-                        category.name,
-                        limitInUserCurrency,
-                        spentInUserCurrency
-                    );
+            const monthlyCategoryTransactions = await Transaction.findAll({
+                where: {
+                    userId: req.user.id,
+                    categoryId,
+                    date: { [Op.between]: [startOfMonth.toISOString().split('T')[0], endOfMonth.toISOString().split('T')[0]] }
                 }
-            }
+            });
+
+            // Calculate net spending in USD (Expenses - Incomes)
+            const convertedValues = await Promise.all(monthlyCategoryTransactions.map(async (t) => {
+                const usdVal = await convert(parseFloat(t.amount), t.currency || 'USD', 'USD');
+                return t.type === 'expense' ? usdVal : -usdVal;
+            }));
+            const totalSpentUsd = convertedValues.reduce((acc, val) => acc + val, 0);
+
+            const category = await Category.findByPk(categoryId);
+            const userCurrency = req.user.currency || 'USD';
+
+            // Convert values for display in email
+            const limitInUserCurrency = await convert(parseFloat(budget.amount), 'USD', userCurrency);
+            const spentInUserCurrency = await convert(totalSpentUsd, 'USD', userCurrency);
+            const transAmtInUserCurrency = await convert(parseFloat(amount), currency || 'USD', userCurrency);
+
+            // Send Real-time Budget Progress Email for every transaction
+            await sendTransactionBudgetUpdate(
+                req.user.email,
+                category.name,
+                { amount: transAmtInUserCurrency, type, description },
+                limitInUserCurrency,
+                spentInUserCurrency,
+                userCurrency
+            );
         }
 
         res.redirect('/transactions');
@@ -139,36 +136,45 @@ router.put('/update', isAuth, upload.single('receipt'), async (req, res) => {
         });
 
         // Budget Overrun Check (Only for Expenses)
-        if (type === 'expense' && categoryId) {
-            const budget = await Budget.findOne({ where: { userId: req.user.id, categoryId } });
-            if (budget) {
-                const now = new Date(date);
-                const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-                const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        // Budget Tracking & Notifications (Runs if a budget exists for this category)
+        const budget = await Budget.findOne({ where: { userId: req.user.id, categoryId } });
+        if (budget) {
+            const now = new Date(date);
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
-                const currentMonthExpenses = await Transaction.findAll({
-                    where: {
-                        userId: req.user.id,
-                        categoryId,
-                        type: 'expense',
-                        date: { [Op.between]: [startOfMonth.toISOString().split('T')[0], endOfMonth.toISOString().split('T')[0]] }
-                    }
-                });
-
-                const convertedExpenses = await Promise.all(currentMonthExpenses.map(async (t) => {
-                    return await convert(parseFloat(t.amount), t.currency || 'USD', 'USD');
-                }));
-                const totalSpentUsd = convertedExpenses.reduce((acc, val) => acc + val, 0);
-
-                if (totalSpentUsd > parseFloat(budget.amount)) {
-                    const category = await Category.findByPk(categoryId);
-                    const userCurrency = req.user.currency || 'USD';
-                    const limitInUserCurrency = await convert(parseFloat(budget.amount), 'USD', userCurrency);
-                    const spentInUserCurrency = await convert(totalSpentUsd, 'USD', userCurrency);
-
-                    await sendBudgetAlert(req.user.email, category.name, limitInUserCurrency, spentInUserCurrency);
+            const monthlyCategoryTransactions = await Transaction.findAll({
+                where: {
+                    userId: req.user.id,
+                    categoryId,
+                    date: { [Op.between]: [startOfMonth.toISOString().split('T')[0], endOfMonth.toISOString().split('T')[0]] }
                 }
-            }
+            });
+
+            // Calculate net spending in USD (Expenses - Incomes)
+            const convertedValues = await Promise.all(monthlyCategoryTransactions.map(async (t) => {
+                const usdVal = await convert(parseFloat(t.amount), t.currency || 'USD', 'USD');
+                return t.type === 'expense' ? usdVal : -usdVal;
+            }));
+            const totalSpentUsd = convertedValues.reduce((acc, val) => acc + val, 0);
+
+            const category = await Category.findByPk(categoryId);
+            const userCurrency = req.user.currency || 'USD';
+
+            // Convert values for display in email
+            const limitInUserCurrency = await convert(parseFloat(budget.amount), 'USD', userCurrency);
+            const spentInUserCurrency = await convert(totalSpentUsd, 'USD', userCurrency);
+            const transAmtInUserCurrency = await convert(parseFloat(amount), currency || 'USD', userCurrency);
+
+            // Send Real-time Budget Progress Email for every update
+            await sendTransactionBudgetUpdate(
+                req.user.email,
+                category.name,
+                { amount: transAmtInUserCurrency, type, description },
+                limitInUserCurrency,
+                spentInUserCurrency,
+                userCurrency
+            );
         }
 
         res.redirect('/transactions');
