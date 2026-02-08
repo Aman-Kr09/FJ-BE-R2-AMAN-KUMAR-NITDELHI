@@ -10,6 +10,13 @@ require('./models'); // Load associations
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const fs = require('fs');
+
+// Ensure uploads directory exists
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir);
+}
 
 // Middleware
 app.set('view engine', 'ejs');
