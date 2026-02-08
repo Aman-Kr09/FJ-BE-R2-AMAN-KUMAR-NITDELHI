@@ -1,9 +1,14 @@
 <%- include('../partials/header') %>
     <div style="margin-top: 40px;">
-        <div style="display:flex; justify-content:space-between; align-items: center;">
+        <div style="display:flex; justify-content:space-between; align-items: center; margin-bottom: 30px;">
             <h1>Financial Reports</h1>
             <div style="display: flex; gap: 20px; align-items: center;">
-                <span style="color: var(--text-muted);">Showing in <strong>
+                <button onclick="window.print()" class="btn-outline"
+                    style="background: var(--primary); color: white; border: none; display: flex; align-items: center; gap: 8px;">
+                    <i data-lucide="download" style="width: 18px; height: 18px;"></i>
+                    Download PDF
+                </button>
+                <span style="color: var(--text-muted);">In <strong>
                         <%= userCurrency %>
                     </strong></span>
                 <form action="/reports" method="GET" style="display: flex; gap: 10px; align-items: center;">
@@ -22,24 +27,80 @@
         <!-- Summary Stats -->
         <div class="dashboard-grid" style="margin-top: 20px;">
             <div class="stat-card" style="border-top: 4px solid var(--success);">
-                <span class="stat-label">Total Income (<%= currentYear %>)</span>
-                <div class="stat-value" style="color: var(--success);">
+                <span class="stat-label">TOTAL INCOME (<%= currentYear %>)</span>
+                <div class="stat-value" style="color: var(--success); font-size: 1.8rem;">
                     <%= userCurrency %>
-                        <%= totalIncome.toLocaleString(undefined, {minimumFractionDigits: 2}) %>
+                        <%= totalIncome.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})
+                            %>
                 </div>
             </div>
             <div class="stat-card" style="border-top: 4px solid var(--danger);">
-                <span class="stat-label">Total Expenses (<%= currentYear %>)</span>
-                <div class="stat-value" style="color: var(--danger);">-<%= userCurrency %>
-                        <%= totalExpense.toLocaleString(undefined, {minimumFractionDigits: 2}) %>
+                <span class="stat-label">TOTAL EXPENSES (<%= currentYear %>)</span>
+                <div class="stat-value" style="color: var(--danger); font-size: 1.8rem;">
+                    -<%= userCurrency %>
+                        <%= totalExpense.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})
+                            %>
                 </div>
             </div>
             <div class="stat-card" style="border-top: 4px solid var(--primary);">
-                <span class="stat-label">Net Balance</span>
-                <div class="stat-value">
+                <span class="stat-label">NET BALANCE</span>
+                <div class="stat-value" style="font-size: 1.8rem;">
                     <%= userCurrency %>
-                        <%= (totalIncome - totalExpense).toLocaleString(undefined, {minimumFractionDigits: 2}) %>
+                        <%= (totalIncome - totalExpense).toLocaleString(undefined, {minimumFractionDigits: 2,
+                            maximumFractionDigits: 2}) %>
                 </div>
+            </div>
+        </div>
+
+        <!-- Monthly Breakdown Table -->
+        <div class="stat-card" style="margin-top: 30px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+                <h3 style="margin: 0;">Monthly Breakdown (<%= currentYear %>)</h3>
+                <span
+                    style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em;">Income
+                    vs. Expenses</span>
+            </div>
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                    <thead>
+                        <tr
+                            style="border-bottom: 2px solid var(--border); color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em;">
+                            <th style="padding: 12px 10px;">Month</th>
+                            <th style="padding: 12px 10px; text-align: right;">Income</th>
+                            <th style="padding: 12px 10px; text-align: right;">Expenses</th>
+                            <th style="padding: 12px 10px; text-align: right;">Net Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% fullYearBreakdown.forEach(row=> { %>
+                            <tr style="border-bottom: 1px solid var(--border); transition: background 0.2s;"
+                                onmouseover="this.style.background='rgba(255,255,255,0.02)'"
+                                onmouseout="this.style.background='transparent'">
+                                <td style="padding: 15px 10px; font-weight: 500;">
+                                    <%= row.month %>
+                                </td>
+                                <td style="padding: 15px 10px; text-align: right; color: var(--success);">
+                                    <%= row.income> 0 ? row.income.toLocaleString(undefined, {minimumFractionDigits: 2,
+                                        maximumFractionDigits: 2}) : '—' %>
+                                </td>
+                                <td style="padding: 15px 10px; text-align: right; color: var(--danger);">
+                                    <%= row.expense> 0 ? row.expense.toLocaleString(undefined, {minimumFractionDigits:
+                                        2, maximumFractionDigits: 2}) : '—' %>
+                                </td>
+                                <% const savingsClass=row.savings>= 0 ? 'type-income' : 'type-expense';
+                                    const formattedSavings = row.savings === 0 ? '—' :
+                                    (row.savings > 0 ? '' : '-') + userCurrency + ' ' +
+                                    Math.abs(row.savings).toLocaleString(undefined, {minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2});
+                                    %>
+                                    <td class="<%= savingsClass %>"
+                                        style="padding: 15px 10px; text-align: right; font-weight: 700;">
+                                        <%= formattedSavings %>
+                                    </td>
+                            </tr>
+                            <% }) %>
+                    </tbody>
+                </table>
             </div>
         </div>
 

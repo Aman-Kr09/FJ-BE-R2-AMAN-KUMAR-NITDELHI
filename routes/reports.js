@@ -48,7 +48,30 @@ router.get('/', isAuth, async (req, res) => {
             }
         }
 
-        // 2. Fetch monthly trend for the last 6 months
+        // 2. Full Year Monthly Breakdown (Table)
+        const fullYearBreakdown = [];
+        const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+        for (let m = 0; m < 12; m++) {
+            const monthStr = (m + 1).toString().padStart(2, '0');
+            const yearMonth = `${currentYear}-${monthStr}`;
+
+            const monthly = transactionEntries.filter(t => t.date.slice(0, 7) === yearMonth);
+            let mi = 0, me = 0;
+            for (const t of monthly) {
+                if (t.type === 'income') mi += t.amt;
+                else me += t.amt;
+            }
+
+            fullYearBreakdown.push({
+                month: monthNames[m],
+                income: mi,
+                expense: me,
+                savings: mi - me
+            });
+        }
+
+        // 3. Last 6 Months Trend (Chart)
         const sixMonthsAgo = new Date();
         sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
         sixMonthsAgo.setDate(1);
@@ -61,16 +84,16 @@ router.get('/', isAuth, async (req, res) => {
         });
 
         const months = [];
-        const monthIncome = [];
-        const monthExpense = [];
+        const monthIncomeTrend = [];
+        const monthExpenseTrend = [];
 
         for (let i = 0; i < 6; i++) {
             const d = new Date();
             d.setMonth(d.getMonth() - (5 - i));
-            const m = d.toLocaleString('default', { month: 'short' });
+            const mLabel = d.toLocaleString('default', { month: 'short' });
             const yearMonth = d.toISOString().slice(0, 7);
 
-            months.push(m);
+            months.push(mLabel);
             const monthly = trendTransactions.filter(t => t.date.slice(0, 7) === yearMonth);
 
             let mi = 0, me = 0;
@@ -79,8 +102,8 @@ router.get('/', isAuth, async (req, res) => {
                 if (t.type === 'income') mi += convertedAmt;
                 else me += convertedAmt;
             }
-            monthIncome.push(mi);
-            monthExpense.push(me);
+            monthIncomeTrend.push(mi);
+            monthExpenseTrend.push(me);
         }
 
         res.render('reports/index', {
@@ -90,8 +113,9 @@ router.get('/', isAuth, async (req, res) => {
             expenseCategories,
             incomeCategories,
             months,
-            monthIncome,
-            monthExpense,
+            monthIncome: monthIncomeTrend,
+            monthExpense: monthExpenseTrend,
+            fullYearBreakdown,
             currentYear,
             userCurrency
         });
