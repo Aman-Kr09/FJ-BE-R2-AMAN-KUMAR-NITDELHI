@@ -13,6 +13,8 @@ passport.use(new LocalStrategy({ usernameField: 'email' }, async (email, passwor
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) return done(null, false, { message: 'Incorrect password' });
 
+        if (!user.isVerified) return done(null, false, { message: 'Please verify your email address' });
+
         return done(null, user);
     } catch (err) {
         return done(err);
@@ -32,7 +34,8 @@ passport.use(new GoogleStrategy({
                 googleId: profile.id,
                 name: profile.displayName,
                 email: profile.emails[0].value,
-                profilePic: profile.photos[0].value
+                profilePic: profile.photos[0].value,
+                isVerified: true
             });
         }
         return done(null, user);

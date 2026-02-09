@@ -217,4 +217,48 @@ const sendOTP = async (userEmail, otp) => {
     }
 };
 
-module.exports = { sendBudgetAlert, sendBudgetUpdate, sendTransactionBudgetUpdate, sendOTP };
+const sendVerificationEmail = async (userEmail, otp) => {
+    try {
+        if (!process.env.RESEND_API_KEY) {
+            console.error('RESEND_API_KEY is missing. Email skipped.');
+            return false;
+        }
+
+        const { data, error } = await resend.emails.send({
+            from: FROM_EMAIL,
+            to: userEmail,
+            subject: `📧 Verify Your Email - FinanceTracker`,
+            html: `
+                <div style="font-family: 'Outfit', sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #0f172a; color: #f8fafc;">
+                    <h2 style="color: #6366f1; text-align: center;">Welcome to FinanceTracker!</h2>
+                    <p style="font-size: 1.1rem;">Hello,</p>
+                    <p>Thank you for signing up! To ensure your email address is valid and to active your account, please use the verification code below:</p>
+                    
+                    <div style="background: #1e293b; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center;">
+                        <h1 style="margin: 0; font-size: 3rem; letter-spacing: 10px; color: #10b981;">${otp}</h1>
+                    </div>
+
+                    <p>This code will expire in 10 minutes. If you did not create an account, please ignore this email.</p>
+                    
+                    <hr style="border: 0; border-top: 1px solid #334155; margin: 30px 0;">
+                    <p style="font-size: 0.8rem; color: #94a3b8; text-align: center;">
+                        Empowering your financial journey.
+                    </p>
+                </div>
+            `
+        });
+
+        if (error) {
+            console.error('Resend Error:', error);
+            return false;
+        }
+
+        console.log('Verification Email Sent:', data.id);
+        return true;
+    } catch (error) {
+        console.error('Error sending verification email:', error);
+        return false;
+    }
+};
+
+module.exports = { sendBudgetAlert, sendBudgetUpdate, sendTransactionBudgetUpdate, sendOTP, sendVerificationEmail };

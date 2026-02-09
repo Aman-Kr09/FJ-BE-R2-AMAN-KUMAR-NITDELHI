@@ -7,24 +7,81 @@ const { User, Category } = require('../models');
 router.get('/login', (req, res) => res.render('login', { title: 'Login' }));
 router.get('/register', (req, res) => res.render('register', { title: 'Register' }));
 
+// Update Google callback to auto-verify since Google already verified the email
+router.get('/google/callback', passport.authenticate('google', { failureRedirect: '/auth/login' }), async (req, res) => {
+    if (req.user) {
+        await req.user.update({ isVerified: true });
+        res.redirect('/dashboard');
+    } else {
+        res.redirect('/auth/login');
+    }
+});
+
+const { sendOTP, sendVerificationEmail } = require('../services/emailService');
+
 router.post('/register', async (req, res) => {
     const { name, email, password } = req.body;
     try {
         let user = await User.findOne({ where: { email } });
-        if (user) return res.render('register', { error: 'Email already registered' });
+        if (user) return res.render('register', { title: 'Register', error: 'Email already registered' });
 
         const hashedPassword = await bcrypt.hash(password, 10);
-        const newUser = await User.create({ name, email, password: hashedPassword });
 
+        // Generate OTP
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const expiry = new Date(Date.now() + 10 * 60 * 1000);
+
+        const newUser = await User.create({
+            name,
+            email,
+            password: hashedPassword,
+            otpCode: otp,
+            otpExpiry: expiry,
+            isVerified: false
+        });
+
+        // Default categories (optional to move to after verification, but fine here)
+
+        await sendVerificationEmail(email, otp);
+        res.render('verify-registration', { title: 'Verify Email', email });
+    } catch (err) {
+        console.error(err);
+        res.render('register', { title: 'Register', error: 'Something went wrong' });
+    }
+});
+
+router.get('/verify-registration', (req, res) => {
+    res.render('verify-registration', { title: 'Verify Email', email: req.query.email });
+});
+
+router.post('/verify-registration', async (req, res) => {
+    const { email, otp } = req.body;
+    try {
+        const user = await User.findOne({
+            where: {
+                email,
+                otpCode: otp,
+                otpExpiry: { [Op.gt]: new Date() }
+            }
+        });
+
+        if (!user) {
+            return res.render('verify-registration', { title: 'Verify Email', email, error: 'Invalid or expired code' });
+        }
+
+        await user.update({ isVerified: true, otpCode: null, otpExpiry: null });
+
+        // Add default categories after successful verification
         const defaultCategories = [
             { name: 'Food', type: 'expense' }, { name: 'Rent', type: 'expense' },
             { name: 'Salary', type: 'income' }, { name: 'Investment', type: 'income' },
             { name: 'Shopping', type: 'expense' }, { name: 'Health', type: 'expense' }
         ];
-        await Category.bulkCreate(defaultCategories.map(c => ({ ...c, userId: newUser.id })));
-        res.redirect('/auth/login');
+        await Category.bulkCreate(defaultCategories.map(c => ({ ...c, userId: user.id })));
+
+        res.render('login', { title: 'Login', success: 'Email verified! You can now login.' });
     } catch (err) {
-        res.render('register', { error: 'Something went wrong' });
+        res.render('verify-registration', { title: 'Verify Email', email, error: 'Something went wrong' });
     }
 });
 
@@ -34,10 +91,6 @@ router.post('/login', passport.authenticate('local', {
 }));
 
 router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
-router.get('/google/callback', passport.authenticate('google', {
-    successRedirect: '/dashboard',
-    failureRedirect: '/auth/login'
-}));
 
 router.get('/logout', (req, res) => {
     req.logout((err) => res.redirect('/'));
