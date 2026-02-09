@@ -125,4 +125,35 @@ router.get('/', isAuth, async (req, res) => {
     }
 });
 
+const { getAnomalies } = require('../services/anomalyService');
+
+router.get('/anomalies', isAuth, async (req, res) => {
+    try {
+        const anomalies = await getAnomalies(req.user.id);
+        const userCurrency = req.user.currency || 'USD';
+
+        res.render('reports/anomalies', {
+            title: 'Spending Anomalies',
+            anomalies,
+            userCurrency
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Internal Server Error');
+    }
+});
+
+router.post('/anomalies/dismiss/:id', isAuth, async (req, res) => {
+    try {
+        await Transaction.update(
+            { isAnomalyDismissed: true },
+            { where: { id: req.params.id, userId: req.user.id } }
+        );
+        res.json({ success: true });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 module.exports = router;

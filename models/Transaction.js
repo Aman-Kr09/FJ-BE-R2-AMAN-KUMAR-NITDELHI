@@ -29,6 +29,10 @@ const Transaction = sequelize.define('Transaction', {
     },
     receiptUrl: {
         type: DataTypes.STRING
+    },
+    isAnomalyDismissed: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false
     }
 });
 
