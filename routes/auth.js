@@ -43,4 +43,86 @@ router.get('/logout', (req, res) => {
     req.logout((err) => res.redirect('/'));
 });
 
+// Forgot Password Flow
+const { sendOTP } = require('../services/emailService');
+const { Op } = require('sequelize');
+
+router.get('/forgot-password', (req, res) => {
+    res.render('forgot-password', { title: 'Forgot Password' });
+});
+
+router.post('/forgot-password', async (req, res) => {
+    const { email } = req.body;
+    try {
+        const user = await User.findOne({ where: { email } });
+        if (!user) {
+            // We don't want to reveal if email exists, but for UX in a take-home we might
+            return res.render('forgot-password', { title: 'Forgot Password', error: 'User not found' });
+        }
+
+        // Generate 6-digit OTP
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const expiry = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
+
+        await user.update({ otpCode: otp, otpExpiry: expiry });
+        await sendOTP(email, otp);
+
+        res.render('verify-otp', { title: 'Verify OTP', email });
+    } catch (err) {
+        console.error(err);
+        res.render('forgot-password', { title: 'Forgot Password', error: 'Failed to send OTP' });
+    }
+});
+
+router.post('/verify-otp', async (req, res) => {
+    const { email, otp } = req.body;
+    try {
+        const user = await User.findOne({
+            where: {
+                email,
+                otpCode: otp,
+                otpExpiry: { [Op.gt]: new Date() }
+            }
+        });
+
+        if (!user) {
+            return res.render('verify-otp', { title: 'Verify OTP', email, error: 'Invalid or expired OTP' });
+        }
+
+        res.render('reset-password', { title: 'Reset Password', email, otp });
+    } catch (err) {
+        res.render('verify-otp', { title: 'Verify OTP', email, error: 'Something went wrong' });
+    }
+});
+
+router.post('/reset-password', async (req, res) => {
+    const { email, otp, password, confirmPassword } = req.body;
+    if (password !== confirmPassword) {
+        return res.render('reset-password', { title: 'Reset Password', email, otp, error: 'Passwords do not match' });
+    }
+
+    try {
+        const user = await User.findOne({
+            where: {
+                email,
+                otpCode: otp,
+                otpExpiry: { [Op.gt]: new Date() }
+            }
+        });
+
+        if (!user) return res.redirect('/auth/forgot-password');
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+        await user.update({
+            password: hashedPassword,
+            otpCode: null,
+            otpExpiry: null
+        });
+
+        res.render('login', { title: 'Login', success: 'Password reset successful. Please login.' });
+    } catch (err) {
+        res.render('reset-password', { title: 'Reset Password', email, otp, error: 'Failed to reset password' });
+    }
+});
+
 module.exports = router;

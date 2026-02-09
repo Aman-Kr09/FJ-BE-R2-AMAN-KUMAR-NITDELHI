@@ -51,3 +51,17 @@
                         <% } %>
             </div>
         </nav>
+
+        <% if (locals.error && error.length> 0) { %>
+            <div
+                style="background: rgba(239, 68, 68, 0.1); border: 1px solid var(--danger); color: var(--danger); padding: 12px; border-radius: 8px; margin: 20px 0; text-align: center;">
+                <%= error %>
+            </div>
+            <% } %>
+
+                <% if (locals.success && success.length> 0) { %>
+                    <div
+                        style="background: rgba(16, 185, 129, 0.1); border: 1px solid var(--success); color: var(--success); padding: 12px; border-radius: 8px; margin: 20px 0; text-align: center;">
+                        <%= success %>
+                    </div>
+                    <% } %>

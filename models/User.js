@@ -33,6 +33,14 @@ const User = sequelize.define('User', {
     currency: {
         type: DataTypes.STRING,
         defaultValue: 'USD'
+    },
+    otpCode: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+    otpExpiry: {
+        type: DataTypes.DATE,
+        allowNull: true
     }
 });
 
