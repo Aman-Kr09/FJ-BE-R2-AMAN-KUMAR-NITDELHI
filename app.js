@@ -57,8 +57,10 @@ const categoryRouter = require('./routes/categories');
 const savingsRouter = require('./routes/savings');
 
 const userRouter = require('./routes/user');
+const aiRouter = require('./routes/ai');
 
 app.use('/auth', authRouter);
+app.use('/auth/ai', aiRouter);
 app.use('/dashboard', dashboardRouter);
 app.use('/transactions', transactionRouter);
 app.use('/budgets', budgetRouter);
