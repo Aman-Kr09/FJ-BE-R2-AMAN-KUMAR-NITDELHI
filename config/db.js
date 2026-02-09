@@ -1,7 +1,7 @@
 require('dotenv').config();
 const { Sequelize } = require('sequelize');
 
-const isCloud = process.env.DB_HOST && process.env.DB_HOST.includes('neon.tech');
+const isCloud = process.env.DB_HOST && (process.env.DB_HOST.includes('neon.tech') || process.env.DB_HOST.includes('render.com'));
 
 const sequelize = new Sequelize(
   process.env.DB_NAME || 'finance_tracker',
