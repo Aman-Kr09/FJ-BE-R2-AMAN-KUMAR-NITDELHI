@@ -18,6 +18,7 @@ router.get('/google/callback', passport.authenticate('google', { failureRedirect
 });
 
 const { sendOTP, sendVerificationEmail } = require('../services/emailService');
+const { Op } = require('sequelize');
 
 router.post('/register', async (req, res) => {
     const { name, email, password } = req.body;
@@ -97,8 +98,6 @@ router.get('/logout', (req, res) => {
 });
 
 // Forgot Password Flow
-const { sendOTP } = require('../services/emailService');
-const { Op } = require('sequelize');
 
 router.get('/forgot-password', (req, res) => {
     res.render('forgot-password', { title: 'Forgot Password' });
