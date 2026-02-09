@@ -5,6 +5,7 @@ const session = require('express-session');
 const passport = require('passport');
 require('./config/passport'); // Load passport config
 const methodOverride = require('method-override');
+const flash = require('express-flash');
 const sequelize = require('./config/db');
 require('./models'); // Load associations
 
@@ -25,9 +26,9 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(methodOverride('_method'));
+app.use(flash());
 
-// Flash middleware (optional but good)
-// For now, simple error handling via locals
+// Flash middleware
 
 app.use(session({
     secret: process.env.SESSION_SECRET || 'finance_tracker_secret',

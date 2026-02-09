@@ -80,7 +80,8 @@ router.post('/verify-registration', async (req, res) => {
         ];
         await Category.bulkCreate(defaultCategories.map(c => ({ ...c, userId: user.id })));
 
-        res.render('login', { title: 'Login', success: 'Email verified! You can now login.' });
+        req.flash('success', 'Email verified! You can now login.');
+        res.redirect('/auth/login');
     } catch (err) {
         res.render('verify-registration', { title: 'Verify Email', email, error: 'Something went wrong' });
     }
@@ -88,7 +89,8 @@ router.post('/verify-registration', async (req, res) => {
 
 router.post('/login', passport.authenticate('local', {
     successRedirect: '/dashboard',
-    failureRedirect: '/auth/login'
+    failureRedirect: '/auth/login',
+    failureFlash: true
 }));
 
 router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
@@ -168,10 +170,12 @@ router.post('/reset-password', async (req, res) => {
         await user.update({
             password: hashedPassword,
             otpCode: null,
-            otpExpiry: null
+            otpExpiry: null,
+            isVerified: true
         });
 
-        res.render('login', { title: 'Login', success: 'Password reset successful. Please login.' });
+        req.flash('success', 'Password reset successful. Please login.');
+        res.redirect('/auth/login');
     } catch (err) {
         res.render('reset-password', { title: 'Reset Password', email, otp, error: 'Failed to reset password' });
     }
