@@ -1,18 +1,21 @@
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 require('dotenv').config();
 
-const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-        user: process.env.NODEMAILER_EMAIL,
-        pass: process.env.NODEMAILER_PASS
-    }
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+// NOTE: Resend requires a verified domain to send from custom addresses.
+// For testing, you can use 'onboarding@resend.dev'.
+const FROM_EMAIL = 'FinanceTracker <onboarding@resend.dev>';
 
 const sendBudgetAlert = async (userEmail, categoryName, budgetAmount, spentAmount) => {
     try {
-        const mailOptions = {
-            from: `"FinanceTracker" <${process.env.NODEMAILER_EMAIL}>`,
+        if (!process.env.RESEND_API_KEY) {
+            console.error('RESEND_API_KEY is missing. Email skipped.');
+            return false;
+        }
+
+        const { data, error } = await resend.emails.send({
+            from: FROM_EMAIL,
             to: userEmail,
             subject: `⚠️ Budget Alert: ${categoryName} Limit Exceeded!`,
             html: `
@@ -40,10 +43,14 @@ const sendBudgetAlert = async (userEmail, categoryName, budgetAmount, spentAmoun
                     </p>
                 </div>
             `
-        };
+        });
 
-        const info = await transporter.sendMail(mailOptions);
-        console.log('Budget Alert Sent:', info.messageId);
+        if (error) {
+            console.error('Resend Error:', error);
+            return false;
+        }
+
+        console.log('Budget Alert Sent:', data.id);
         return true;
     } catch (error) {
         console.error('Error sending budget alert:', error);
@@ -53,8 +60,13 @@ const sendBudgetAlert = async (userEmail, categoryName, budgetAmount, spentAmoun
 
 const sendBudgetUpdate = async (userEmail, categoryName, newLimit, userCurrency) => {
     try {
-        const mailOptions = {
-            from: `"FinanceTracker" <${process.env.NODEMAILER_EMAIL}>`,
+        if (!process.env.RESEND_API_KEY) {
+            console.error('RESEND_API_KEY is missing. Email skipped.');
+            return false;
+        }
+
+        const { data, error } = await resend.emails.send({
+            from: FROM_EMAIL,
             to: userEmail,
             subject: `✅ Budget Updated: ${categoryName}`,
             html: `
@@ -82,10 +94,14 @@ const sendBudgetUpdate = async (userEmail, categoryName, newLimit, userCurrency)
                     </p>
                 </div>
             `
-        };
+        });
 
-        const info = await transporter.sendMail(mailOptions);
-        console.log('Budget Update Notification Sent:', info.messageId);
+        if (error) {
+            console.error('Resend Error:', error);
+            return false;
+        }
+
+        console.log('Budget Update Notification Sent:', data.id);
         return true;
     } catch (error) {
         console.error('Error sending budget update notification:', error);
@@ -95,11 +111,16 @@ const sendBudgetUpdate = async (userEmail, categoryName, newLimit, userCurrency)
 
 const sendTransactionBudgetUpdate = async (userEmail, categoryName, transactionDetail, budgetLimit, currentSpent, userCurrency) => {
     try {
+        if (!process.env.RESEND_API_KEY) {
+            console.error('RESEND_API_KEY is missing. Email skipped.');
+            return false;
+        }
+
         const percent = (currentSpent / budgetLimit) * 100;
         const statusColor = percent > 100 ? '#ef4444' : percent > 80 ? '#f59e0b' : '#10b981';
 
-        const mailOptions = {
-            from: `"FinanceTracker" <${process.env.NODEMAILER_EMAIL}>`,
+        const { data, error } = await resend.emails.send({
+            from: FROM_EMAIL,
             to: userEmail,
             subject: `📊 Budget Update: ${categoryName}`,
             html: `
@@ -136,10 +157,14 @@ const sendTransactionBudgetUpdate = async (userEmail, categoryName, transactionD
                     </p>
                 </div>
             `
-        };
+        });
 
-        await transporter.sendMail(mailOptions);
-        console.log('Transaction Budget Update Sent');
+        if (error) {
+            console.error('Resend Error:', error);
+            return false;
+        }
+
+        console.log('Transaction Budget Update Sent:', data.id);
         return true;
     } catch (error) {
         console.error('Error sending transaction budget update:', error);
