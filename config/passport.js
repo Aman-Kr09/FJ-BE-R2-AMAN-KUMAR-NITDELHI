@@ -22,7 +22,8 @@ passport.use(new LocalStrategy({ usernameField: 'email' }, async (email, passwor
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID || 'dummy',
     clientSecret: process.env.GOOGLE_CLIENT_SECRET || 'dummy',
-    callbackURL: "/auth/google/callback"
+    callbackURL: "/auth/google/callback",
+    proxy: true
 }, async (accessToken, refreshToken, profile, done) => {
     try {
         let user = await User.findOne({ where: { googleId: profile.id } });
