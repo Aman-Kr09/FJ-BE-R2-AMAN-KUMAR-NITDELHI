@@ -29,14 +29,27 @@ passport.use(new GoogleStrategy({
 }, async (accessToken, refreshToken, profile, done) => {
     try {
         let user = await User.findOne({ where: { googleId: profile.id } });
+
         if (!user) {
-            user = await User.create({
-                googleId: profile.id,
-                name: profile.displayName,
-                email: profile.emails[0].value,
-                profilePic: profile.photos[0].value,
-                isVerified: true
-            });
+            // Check if user exists with the same email
+            user = await User.findOne({ where: { email: profile.emails[0].value } });
+
+            if (user) {
+                // Link Google ID to existing account
+                user.googleId = profile.id;
+                user.profilePic = profile.photos[0].value;
+                user.isVerified = true;
+                await user.save();
+            } else {
+                // Create new user
+                user = await User.create({
+                    googleId: profile.id,
+                    name: profile.displayName,
+                    email: profile.emails[0].value,
+                    profilePic: profile.photos[0].value,
+                    isVerified: true
+                });
+            }
         }
         return done(null, user);
     } catch (err) {
