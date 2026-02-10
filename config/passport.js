@@ -13,7 +13,7 @@ passport.use(new LocalStrategy({ usernameField: 'email' }, async (email, passwor
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) return done(null, false, { message: 'Incorrect password' });
 
-        if (!user.isVerified) return done(null, false, { message: 'Please verify your email address' });
+        // Verification check removed per user request
 
         return done(null, user);
     } catch (err) {

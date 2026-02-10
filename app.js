@@ -79,7 +79,7 @@ app.get('/', (req, res) => {
 
 
 // Database Sync & Server Start
-sequelize.sync({ alter: true }).then(() => {
+sequelize.sync().then(() => {
     console.log('Database connected and synchronized');
     app.listen(PORT, () => {
         console.log(`Server running on http://localhost:${PORT}`);

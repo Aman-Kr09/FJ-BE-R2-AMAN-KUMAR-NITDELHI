@@ -17,10 +17,11 @@ router.get('/google/callback', passport.authenticate('google', { failureRedirect
     }
 });
 
-const { sendOTP, sendVerificationEmail } = require('../services/emailService');
+// Email service imports removed as registration is now auto-verified
 const { Op } = require('sequelize');
 
 router.post('/register', async (req, res) => {
+    console.log('Register request received for:', req.body.email);
     const { name, email, password } = req.body;
     try {
         let user = await User.findOne({ where: { email } });
@@ -28,64 +29,30 @@ router.post('/register', async (req, res) => {
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Generate OTP
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
-        const expiry = new Date(Date.now() + 10 * 60 * 1000);
-
         const newUser = await User.create({
             name,
             email,
             password: hashedPassword,
-            otpCode: otp,
-            otpExpiry: expiry,
-            isVerified: false
+            isVerified: true // Automatically verify
         });
 
-        // Default categories (optional to move to after verification, but fine here)
+        // Add default categories immediately
+        const defaultCategories = [
+            { name: 'Food', type: 'expense' }, { name: 'Rent', type: 'expense' },
+            { name: 'Salary', type: 'income' }, { name: 'Investment', type: 'income' },
+            { name: 'Shopping', type: 'expense' }, { name: 'Health', type: 'expense' }
+        ];
+        await Category.bulkCreate(defaultCategories.map(c => ({ ...c, userId: newUser.id })));
 
-        await sendVerificationEmail(email, otp);
-        res.render('verify-registration', { title: 'Verify Email', email });
+        req.flash('success', 'Registration successful! You can now login.');
+        res.redirect('/auth/login');
     } catch (err) {
         console.error(err);
         res.render('register', { title: 'Register', error: 'Something went wrong' });
     }
 });
 
-router.get('/verify-registration', (req, res) => {
-    res.render('verify-registration', { title: 'Verify Email', email: req.query.email });
-});
-
-router.post('/verify-registration', async (req, res) => {
-    const { email, otp } = req.body;
-    try {
-        const user = await User.findOne({
-            where: {
-                email,
-                otpCode: otp,
-                otpExpiry: { [Op.gt]: new Date() }
-            }
-        });
-
-        if (!user) {
-            return res.render('verify-registration', { title: 'Verify Email', email, error: 'Invalid or expired code' });
-        }
-
-        await user.update({ isVerified: true, otpCode: null, otpExpiry: null });
-
-        // Add default categories after successful verification
-        const defaultCategories = [
-            { name: 'Food', type: 'expense' }, { name: 'Rent', type: 'expense' },
-            { name: 'Salary', type: 'income' }, { name: 'Investment', type: 'income' },
-            { name: 'Shopping', type: 'expense' }, { name: 'Health', type: 'expense' }
-        ];
-        await Category.bulkCreate(defaultCategories.map(c => ({ ...c, userId: user.id })));
-
-        req.flash('success', 'Email verified! You can now login.');
-        res.redirect('/auth/login');
-    } catch (err) {
-        res.render('verify-registration', { title: 'Verify Email', email, error: 'Something went wrong' });
-    }
-});
+// Email verification routes removed per user request
 
 router.post('/login', passport.authenticate('local', {
     successRedirect: '/dashboard',
