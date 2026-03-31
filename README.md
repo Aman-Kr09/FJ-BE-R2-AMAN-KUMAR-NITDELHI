@@ -117,7 +117,9 @@ Create a local `.env` file at the repository root and set the following variable
 | DB_PORT | No | PostgreSQL port. Default: 5432 |
 | DB_NAME | Yes | PostgreSQL database name |
 | DB_USER | Yes | PostgreSQL username |
-| DB_PASS | Yes | PostgreSQL password |
+| DB_PASS | Conditionally | PostgreSQL password (use with DB_* variables) |
+| DB_PASSWORD | Conditionally | Alternative PostgreSQL password key (supported alias for DB_PASS) |
+| DATABASE_URL | Recommended for cloud | Full PostgreSQL connection URL (preferred on Render) |
 | GOOGLE_CLIENT_ID | Optional | Google OAuth client ID |
 | GOOGLE_CLIENT_SECRET | Optional | Google OAuth client secret |
 | RESEND_API_KEY | Optional | Resend API key for email notifications |
