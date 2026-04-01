@@ -1,7 +1,33 @@
 require('dotenv').config();
 const { Sequelize } = require('sequelize');
 
+function parseBoolean(value) {
+    if (typeof value !== 'string') return null;
+    const normalized = value.trim().toLowerCase();
+    if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+    if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+    return null;
+}
+
+function resolveSslOption() {
+    const explicitSsl = parseBoolean(process.env.DB_SSL);
+    if (explicitSsl !== null) {
+        return explicitSsl ? { require: true, rejectUnauthorized: false } : false;
+    }
+
+    const pgSslMode = (process.env.PGSSLMODE || '').toLowerCase();
+    if (pgSslMode === 'disable') return false;
+    if (['require', 'verify-ca', 'verify-full', 'allow', 'prefer', 'no-verify'].includes(pgSslMode)) {
+        return { require: true, rejectUnauthorized: false };
+    }
+
+    return false;
+}
+
+const sslOption = resolveSslOption();
+
 console.log('Testing connection with credentials from .env...');
+console.log(`SSL mode: ${sslOption ? 'on' : 'off'}`);
 
 const sequelize = new Sequelize(
     process.env.DB_NAME,
@@ -11,12 +37,7 @@ const sequelize = new Sequelize(
         host: process.env.DB_HOST,
         port: process.env.DB_PORT || 5432,
         dialect: 'postgres',
-        dialectOptions: {
-            ssl: {
-                require: true,
-                rejectUnauthorized: false
-            }
-        }
+        dialectOptions: sslOption ? { ssl: sslOption } : {}
     }
 );
 
