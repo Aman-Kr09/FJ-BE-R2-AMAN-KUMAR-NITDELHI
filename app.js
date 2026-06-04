@@ -78,8 +78,30 @@ app.get('/', (req, res) => {
 });
 
 
+async function connectDatabaseWithRetry(maxAttempts = 5, initialDelayMs = 1000) {
+    let lastError;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+        try {
+            await sequelize.authenticate();
+            await sequelize.sync();
+            return;
+        } catch (error) {
+            lastError = error;
+            console.error(`Database connection attempt ${attempt} of ${maxAttempts} failed:`, error.message);
+
+            if (attempt < maxAttempts) {
+                const delayMs = initialDelayMs * attempt;
+                await new Promise((resolve) => setTimeout(resolve, delayMs));
+            }
+        }
+    }
+
+    throw lastError;
+}
+
 // Database Sync & Server Start
-sequelize.sync().then(() => {
+connectDatabaseWithRetry().then(() => {
     console.log('Database connected and synchronized');
     app.listen(PORT, () => {
         console.log(`Server running on http://localhost:${PORT}`);

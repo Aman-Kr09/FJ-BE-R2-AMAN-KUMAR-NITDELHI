@@ -16,5 +16,7 @@ services:
         sync: false
       - key: DB_PASS
         sync: false
+      - key: DB_SSL
+        value: true
       - key: SESSION_SECRET
         generateValue: true
