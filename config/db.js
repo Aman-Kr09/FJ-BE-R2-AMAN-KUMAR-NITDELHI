@@ -43,7 +43,12 @@ function resolveSslOption() {
     }
   }
 
-  // Default to non-SSL unless explicitly requested.
+  // Cloud Postgres providers such as Render require SSL, so default to it there.
+  if (isCloud || isProduction) {
+    return { require: true, rejectUnauthorized: false };
+  }
+
+  // Default to non-SSL for local development.
   return false;
 }
 
