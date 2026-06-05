@@ -19,14 +19,14 @@ function resolveSslOption() {
   // Highest precedence: explicit DB_SSL toggle.
   const explicitSsl = parseBoolean(process.env.DB_SSL);
   if (explicitSsl !== null) {
-    return explicitSsl ? { require: true, rejectUnauthorized: false } : false;
+    return explicitSsl ? { rejectUnauthorized: false } : false;
   }
 
   // Next: standard libpq mode if provided.
   const pgSslMode = (process.env.PGSSLMODE || '').toLowerCase();
   if (pgSslMode === 'disable') return false;
   if (['require', 'verify-ca', 'verify-full', 'allow', 'prefer', 'no-verify'].includes(pgSslMode)) {
-    return { require: true, rejectUnauthorized: false };
+    return { rejectUnauthorized: false };
   }
 
   // Finally, infer from DATABASE_URL sslmode query only.
@@ -36,7 +36,7 @@ function resolveSslOption() {
       const sslMode = (url.searchParams.get('sslmode') || '').toLowerCase();
       if (sslMode === 'disable') return false;
       if (['require', 'verify-ca', 'verify-full', 'allow', 'prefer', 'no-verify'].includes(sslMode)) {
-        return { require: true, rejectUnauthorized: false };
+        return { rejectUnauthorized: false };
       }
     } catch (error) {
       // Ignore URL parsing errors; fallback below.
@@ -45,7 +45,7 @@ function resolveSslOption() {
 
   // Cloud Postgres providers such as Render require SSL, so default to it there.
   if (isCloud || isProduction) {
-    return { require: true, rejectUnauthorized: false };
+    return { rejectUnauthorized: false };
   }
 
   // Default to non-SSL for local development.

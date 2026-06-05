@@ -6,8 +6,6 @@ services:
     buildCommand: npm install
     startCommand: node app.js
     envVars:
-      - key: NODE_VERSION
-        value: 18.0.0
       - key: DB_HOST
         sync: false
       - key: DB_NAME
