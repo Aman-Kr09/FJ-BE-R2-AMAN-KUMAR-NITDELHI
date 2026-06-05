@@ -20,7 +20,7 @@ const sendBudgetAlert = async (userEmail, categoryName, budgetAmount, spentAmoun
             subject: `⚠️ Budget Alert: ${categoryName} Limit Exceeded!`,
             html: `
                 <div style="font-family: 'Outfit', sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #0f172a; color: #f8fafc;">
-                    <h2 style="color: #ef4444; text-align: center;">Budget Exceeded!</h2>
+                    <h2 style="color: #ef4444;">Budget Exceeded!</h2>
                     <p style="font-size: 1.1rem;">Hello,</p>
                     <p>This is an automated alert from your <strong>FinanceTracker</strong>.</p>
                     <p>You have exceeded your monthly budget for the category: <strong>${categoryName}</strong>.</p>
@@ -33,12 +33,12 @@ const sendBudgetAlert = async (userEmail, categoryName, budgetAmount, spentAmoun
 
                     <p>We recommend reviewing your recent transactions and adjusting your spending to stay on track with your financial goals.</p>
                     
-                    <div style="text-align: center; margin-top: 30px;">
+                    <div style="margin-top: 30px;">
                         <a href="${process.env.BASE_URL || 'http://localhost:3000'}/budgets" style="background: #6366f1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">Review Budgets</a>
                     </div>
 
                     <hr style="border: 0; border-top: 1px solid #334155; margin: 30px 0;">
-                    <p style="font-size: 0.8rem; color: #94a3b8; text-align: center;">
+                    <p style="font-size: 0.8rem; color: #94a3b8;">
                         This is an automated message. Please do not reply to this email.
                     </p>
                 </div>
@@ -71,25 +71,25 @@ const sendBudgetUpdate = async (userEmail, categoryName, newLimit, userCurrency)
             subject: `✅ Budget Updated: ${categoryName}`,
             html: `
                 <div style="font-family: 'Outfit', sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #0f172a; color: #f8fafc;">
-                    <h2 style="color: #6366f1; text-align: center;">Budget Limit Updated</h2>
+                    <h2 style="color: #6366f1;">Budget Limit Updated</h2>
                     <p style="font-size: 1.1rem;">Hello,</p>
                     <p>Your budget for the category <strong>${categoryName}</strong> has been successfully updated.</p>
                     
                     <div style="background: #1e293b; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                        <p style="margin: 5px 0; font-size: 1.2rem; text-align: center;">
+                        <p style="margin: 5px 0; font-size: 1.2rem;">
                             <strong>New Limit:</strong> 
                             <span style="color: #6366f1;">${userCurrency} ${newLimit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </p>
                     </div>
                     
-                    <p style="text-align: center;">Manage all your budgets and track your spending goals on your dashboard.</p>
+                    <p>Manage all your budgets and track your spending goals on your dashboard.</p>
                     
                     <div style="text-align: center; margin-top: 30px;">
                         <a href="${process.env.BASE_URL || 'http://localhost:3000'}/budgets" style="background: #6366f1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">View All Budgets</a>
                     </div>
                     
                     <hr style="border: 0; border-top: 1px solid #334155; margin: 30px 0;">
-                    <p style="font-size: 0.8rem; color: #94a3b8; text-align: center;">
+                    <p style="font-size: 0.8rem; color: #94a3b8;">
                         This is a confirmation of a change made to your account.
                     </p>
                 </div>
@@ -125,7 +125,7 @@ const sendTransactionBudgetUpdate = async (userEmail, categoryName, transactionD
             subject: `📊 Budget Update: ${categoryName}`,
             html: `
                 <div style="font-family: 'Outfit', sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #0f172a; color: #f8fafc;">
-                    <h2 style="color: #6366f1; text-align: center;">Transaction Recorded</h2>
+                    <h2 style="color: #6366f1;">Transaction Recorded</h2>
                     <p style="font-size: 1.1rem;">A <strong>${transactionDetail.type}</strong> was recorded in category <strong>${categoryName}</strong>.</p>
                     
                     <div style="background: #1e293b; padding: 15px; border-radius: 8px; margin: 20px 0;">
@@ -143,16 +143,16 @@ const sendTransactionBudgetUpdate = async (userEmail, categoryName, transactionD
                         <span>Limit: ${userCurrency} ${budgetLimit.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                     </div>
                     
-                    <p style="text-align: center; margin-top: 20px; font-weight: bold; color: ${statusColor};">
+                    <p style="margin-top: 20px; font-weight: bold; color: ${statusColor};">
                         ${percent > 100 ? '⚠️ Budget Exceeded!' : `You have used ${percent.toFixed(1)}% of your budget.`}
                     </p>
 
-                    <div style="text-align: center; margin-top: 30px;">
+                    <div style="margin-top: 30px;">
                         <a href="${process.env.BASE_URL || 'http://localhost:3000'}/dashboard" style="background: #6366f1; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">Go to Dashboard</a>
                     </div>
                     
                     <hr style="border: 0; border-top: 1px solid #334155; margin: 30px 0;">
-                    <p style="font-size: 0.8rem; color: #94a3b8; text-align: center;">
+                    <p style="font-size: 0.8rem; color: #94a3b8;">
                         This is an automated tracking message.
                     </p>
                 </div>
@@ -185,19 +185,19 @@ const sendOTP = async (userEmail, otp) => {
             subject: `🔐 Your Password Reset OTP`,
             html: `
                 <div style="font-family: 'Outfit', sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #0f172a; color: #f8fafc;">
-                    <h2 style="color: #6366f1; text-align: center;">Password Reset Request</h2>
+                    <h2 style="color: #6366f1;">Password Reset Request</h2>
                     <p style="font-size: 1.1rem;">Hello,</p>
                     <p>We received a request to reset your password for your <strong>FinanceTracker</strong> account.</p>
                     <p>Use the OTP code below to proceed with the password reset. This code is valid for 10 minutes.</p>
                     
-                    <div style="background: #1e293b; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center;">
+                    <div style="background: #1e293b; padding: 20px; border-radius: 8px; margin: 20px 0;">
                         <h1 style="margin: 0; font-size: 3rem; letter-spacing: 10px; color: #6366f1;">${otp}</h1>
                     </div>
 
                     <p>If you did not request this, please ignore this email or contact support if you have concerns.</p>
                     
                     <hr style="border: 0; border-top: 1px solid #334155; margin: 30px 0;">
-                    <p style="font-size: 0.8rem; color: #94a3b8; text-align: center;">
+                    <p style="font-size: 0.8rem; color: #94a3b8;">
                         This is an automated security message.
                     </p>
                 </div>
@@ -230,18 +230,18 @@ const sendVerificationEmail = async (userEmail, otp) => {
             subject: `📧 Verify Your Email - FinanceTracker`,
             html: `
                 <div style="font-family: 'Outfit', sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #0f172a; color: #f8fafc;">
-                    <h2 style="color: #6366f1; text-align: center;">Welcome to FinanceTracker!</h2>
+                    <h2 style="color: #6366f1;">Welcome to FinanceTracker!</h2>
                     <p style="font-size: 1.1rem;">Hello,</p>
                     <p>Thank you for signing up! To ensure your email address is valid and to active your account, please use the verification code below:</p>
                     
-                    <div style="background: #1e293b; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center;">
+                    <div style="background: #1e293b; padding: 20px; border-radius: 8px; margin: 20px 0;">
                         <h1 style="margin: 0; font-size: 3rem; letter-spacing: 10px; color: #10b981;">${otp}</h1>
                     </div>
 
                     <p>This code will expire in 10 minutes. If you did not create an account, please ignore this email.</p>
                     
                     <hr style="border: 0; border-top: 1px solid #334155; margin: 30px 0;">
-                    <p style="font-size: 0.8rem; color: #94a3b8; text-align: center;">
+                    <p style="font-size: 0.8rem; color: #94a3b8;">
                         Empowering your financial journey.
                     </p>
                 </div>
