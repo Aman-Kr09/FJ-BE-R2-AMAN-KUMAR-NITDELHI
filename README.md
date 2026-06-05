@@ -1,5 +1,6 @@
 <div align = "center">
-# Personal Finance Tracker
+
+## Personal Finance Tracker
 
 Personal Finance Tracker is a full-stack web application that provides a structured and scalable approach to personal financial management. It combines transaction operations, budget governance, savings planning, analytics, anomaly detection, and AI-assisted advisory workflows in a single platform.
 
