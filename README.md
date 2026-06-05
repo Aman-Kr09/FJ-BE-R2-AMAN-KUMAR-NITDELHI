@@ -1,3 +1,4 @@
+<div align = "center">
 # Personal Finance Tracker
 
 Personal Finance Tracker is a full-stack web application that provides a structured and scalable approach to personal financial management. It combines transaction operations, budget governance, savings planning, analytics, anomaly detection, and AI-assisted advisory workflows in a single platform.
@@ -9,11 +10,13 @@ Live demo: https://fj-be-r2-aman-kumar-nitdelhi.onrender.com/dashboard
 [![Node.js](https://img.shields.io/badge/node-24+-339933?style=for-the-badge&logo=node.js)](https://nodejs.org/)
 [![Express](https://img.shields.io/badge/express-5.x-000000?style=for-the-badge&logo=express)](https://expressjs.com/)
 
+</div>
+
 ---
 
 ## Application Preview
 
-Screenshot and demo are available on the Live Demo link above. To preview locally, run the app and open `http://localhost:3000`.
+To preview locally, run the app and open `http://localhost:3000`.
 
 [![Live Preview](https://s.wordpress.com/mshots/v1/https://fj-be-r2-aman-kumar-nitdelhi.onrender.com/dashboard?w=1200)](https://fj-be-r2-aman-kumar-nitdelhi.onrender.com/dashboard)
 
