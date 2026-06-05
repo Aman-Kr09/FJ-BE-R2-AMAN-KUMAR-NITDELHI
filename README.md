@@ -2,6 +2,158 @@
 
 Personal Finance Tracker is a full-stack web application that provides a structured and scalable approach to personal financial management. It combines transaction operations, budget governance, savings planning, analytics, anomaly detection, and AI-assisted advisory workflows in a single platform.
 
+Live demo: https://fj-be-r2-aman-kumar-nitdelhi.onrender.com/dashboard
+ 
+<div align="center">
+
+[![Live Demo](https://img.shields.io/badge/demo-live-success?style=for-the-badge)](https://fj-be-r2-aman-kumar-nitdelhi.onrender.com/dashboard)
+[![License](https://img.shields.io/badge/license-ISC-blue?style=for-the-badge)](package.json)
+[![Node.js](https://img.shields.io/badge/node-24+-339933?style=for-the-badge&logo=node.js)](https://nodejs.org/)
+[![Express](https://img.shields.io/badge/express-5.x-000000?style=for-the-badge&logo=express)](https://expressjs.com/)
+
+</div>
+
+---
+
+## Application Preview
+
+Screenshot and demo are available on the Live Demo link above. To preview locally, run the app and open `http://localhost:3000`.
+
+---
+
+## Overview
+
+Finance Tracker helps users track income and expenses, enforce budgets, plan savings, import bank statements, and get actionable insights via analytics and AI-assisted suggestions.
+
+### Key Capabilities
+
+- Account and session-based authentication (local + Google OAuth)
+- Full transaction lifecycle with receipt upload
+- Category budgets with threshold notifications
+- Savings plans and progress tracking
+- CSV statement import with duplicate detection and preview
+- Spending-anomaly detection and review workflow
+- AI-assisted advisory interfaces (extensible provider integrations)
+
+---
+
+## Tech Stack
+
+- Node.js 24+ (Express)
+- EJS templates for server-rendered UI
+- PostgreSQL (Sequelize ORM)
+- Passport (Local & Google OAuth)
+- Chart.js for visualizations
+- Multer for uploads, Resend/Nodemailer for email
+
+See `package.json` for full dependencies.
+
+---
+
+## Quick Start
+
+Prerequisites: Node.js 24+, PostgreSQL, npm
+
+1. Install dependencies
+
+```bash
+npm install
+```
+
+2. Create a `.env` file in the project root (see recommended variables below)
+
+3. Run in development
+
+```bash
+npm run dev
+```
+
+Production start
+
+```bash
+npm start
+```
+
+Open: http://localhost:3000
+
+---
+
+## Recommended Environment Variables
+
+Required or strongly recommended variables:
+
+- `PORT` (optional) — default 3000
+- `SESSION_SECRET` — required
+- `DATABASE_URL` or `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASS`
+- `RESEND_API_KEY` — optional (email)
+- `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` — optional (OAuth)
+- `BASE_URL` — public URL used in emails
+- `XAI_API_KEY` — optional (AI integrations)
+
+---
+
+## API & Routes
+
+This app is server-rendered with EJS templates and exposes route handlers under `routes/`:
+
+- `/dashboard` — main user dashboard
+- `/transactions` — transaction management and import
+- `/budgets` — budget management
+- `/savings` — savings and plans
+- `/reports` — analytics and anomaly views
+
+For programmatic imports and health checks, see `test-db.js` and `check-env.js` utilities.
+
+---
+
+## Deployment
+
+Deployment artifacts for Render are already included (`render.yaml`, `Procfile`). Recommended steps:
+
+1. Use managed PostgreSQL with SSL enabled
+2. Set environment variables securely in the platform
+3. Use `DATABASE_URL` in production for convenience
+
+Render quick notes: configure `start` script to `npm start` and ensure Node engine matches `package.json`.
+
+---
+
+## Project Structure
+
+```
+app.js
+config/      # db.js, passport.js
+models/      # Sequelize models
+routes/      # Express routes
+services/    # business logic and integrations
+views/       # EJS templates
+public/      # static assets
+```
+
+---
+
+## Contributing
+
+Contributions welcome. Fork, branch, and open a pull request. Keep changes focused and add tests where possible.
+
+---
+
+## Troubleshooting
+
+- DB connection errors: verify `DATABASE_URL` or `DB_*` values.
+- OAuth or email issues: confirm provider credentials and `BASE_URL`.
+- Missing assets: ensure `public/` static files are present and served.
+
+---
+
+## License
+
+This project is published under the ISC License (see `package.json`).
+
+---
+
+If you'd like, I can add badges, screenshots, or a Render deploy button, or convert the Live Demo link into a CTA button. Tell me which you prefer.
+
 The solution is built on Node.js, Express, PostgreSQL, Sequelize, and EJS, with a service-oriented backend structure designed for maintainability and production readiness.
 
 ## Table of Contents
