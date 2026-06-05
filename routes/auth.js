@@ -18,6 +18,7 @@ router.get('/google/callback', passport.authenticate('google', { failureRedirect
 });
 
 // Email service imports removed as registration is now auto-verified
+const { sendOTP } = require('../services/emailService');
 const { Op } = require('sequelize');
 
 router.post('/register', async (req, res) => {
