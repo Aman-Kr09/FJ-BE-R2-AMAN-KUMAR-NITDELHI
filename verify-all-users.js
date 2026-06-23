@@ -1,17 +1,13 @@
-const { User } = require('./models');
-const sequelize = require('./config/db');
+require('dotenv').config();
+const connectDB = require('./config/db');
 
-async function verifyAll() {
+(async () => {
     try {
-        await sequelize.authenticate();
-        console.log('Connected.');
-        const result = await User.update({ isVerified: true }, { where: {} });
-        console.log(`Updated ${result[0]} users to verified.`);
+        await connectDB();
+        console.log('MongoDB connection successful!');
         process.exit(0);
-    } catch (err) {
-        console.error(err);
+    } catch (error) {
+        console.error('MongoDB connection failed:', error.message);
         process.exit(1);
     }
-}
-
-verifyAll();
+})();

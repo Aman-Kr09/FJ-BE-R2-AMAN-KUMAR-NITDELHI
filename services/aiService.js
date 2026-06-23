@@ -1,6 +1,5 @@
 const axios = require('axios');
 const { Transaction, Budget, Saving, Category } = require('../models');
-const { Op } = require('sequelize');
 
 const getAIResponse = async (userId, userMessage, conversationHistory = []) => {
     try {
@@ -23,34 +22,26 @@ const getAIResponse = async (userId, userMessage, conversationHistory = []) => {
 
         // 1. Fetch User Financial Context
         const now = new Date();
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
         const [transactions, budgets, savings] = await Promise.all([
-            Transaction.findAll({
-                where: { userId },
-                include: [Category],
-                limit: 20,
-                order: [['date', 'DESC']]
-            }),
-            Budget.findAll({
-                where: { userId },
-                include: [Category]
-            }),
-            Saving.findAll({
-                where: { userId }
-            })
+            Transaction.find({ userId })
+                .populate('categoryId')
+                .sort({ date: -1 })
+                .limit(20),
+            Budget.find({ userId }).populate('categoryId'),
+            Saving.find({ userId })
         ]);
 
         // 2. Prepare context string
         const financialContext = `
 Current Date: ${now.toDateString()}
 User Financial Data:
-- Recent Transactions: ${transactions.map(t => `${t.date}: ${t.type === 'income' ? '+' : '-'}${t.amount} ${t.currency} (${t.Category ? t.Category.name : 'Uncategorized'}) - ${t.description || ''}`).join('; ')}
-- Monthly Budgets: ${budgets.map(b => `${b.Category ? b.Category.name : '??'}: ${b.amount} USD limit`).join('; ')}
-- Savings Goals/Items: ${savings.map(s => `${s.name}: ${s.amount} USD`).join('; ')}
+- Recent Transactions: ${transactions.map(t => `${t.date}: ${t.type === 'income' ? '+' : '-'}${t.amount} ${t.currency} (${t.categoryId ? t.categoryId.name : 'Uncategorized'}) - ${t.description || ''}`).join('; ')}
+- Monthly Budgets: ${budgets.map(b => `${b.categoryId ? b.categoryId.name : '??'}: ${b.amount} USD limit`).join('; ')}
+- Savings Goals/Items: ${savings.map(s => `${s.source}: ${s.amount} USD`).join('; ')}
         `.trim();
 
-        // 2. Call API (OpenAI Compatible)
+        // 3. Call API (OpenAI Compatible)
         console.log(`Calling AI API: ${apiUrl} with model: ${model}`);
 
         const response = await axios.post(apiUrl, {
