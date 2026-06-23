@@ -7,12 +7,70 @@ const { getAIResponse } = require('./aiService');
 
 const parseCSV = (filePath) => {
     return new Promise((resolve, reject) => {
-        const results = [];
-        fs.createReadStream(filePath)
-            .pipe(csv({ mapHeaders: ({ header }) => header.trim().replace(/^\ufeff/, '') }))
-            .on('data', (data) => results.push(data))
-            .on('end', () => resolve(results))
-            .on('error', (error) => reject(error));
+        const readline = require('readline');
+        
+        // 1. Read all lines to detect separator and locate the header row
+        const stream = fs.createReadStream(filePath);
+        const rl = readline.createInterface({
+            input: stream,
+            crlfDelay: Infinity
+        });
+
+        const lines = [];
+        rl.on('line', (line) => {
+            lines.push(line);
+        });
+
+        rl.on('close', () => {
+            if (lines.length === 0) {
+                return resolve([]);
+            }
+
+            // 2. Detect delimiter
+            let separator = ',';
+            const commaCount = lines.slice(0, 10).reduce((acc, l) => acc + (l.match(/,/g) || []).length, 0);
+            const semicolonCount = lines.slice(0, 10).reduce((acc, l) => acc + (l.match(/;/g) || []).length, 0);
+            const tabCount = lines.slice(0, 10).reduce((acc, l) => acc + (l.match(/\t/g) || []).length, 0);
+
+            if (semicolonCount > commaCount && semicolonCount > tabCount) {
+                separator = ';';
+            } else if (tabCount > commaCount && tabCount > semicolonCount) {
+                separator = '\t';
+            }
+
+            // 3. Find the header line index
+            const headerKeywords = ['date', 'desc', 'particulars', 'remarks', 'trans', 'amount', 'value', 'debit', 'credit', 'withdrawal', 'deposit', 'narration', 'amt'];
+            let headerIndex = 0;
+            
+            for (let i = 0; i < Math.min(lines.length, 20); i++) {
+                const columns = lines[i].split(separator).map(col => col.trim().toLowerCase());
+                const matchCount = columns.filter(col => 
+                    headerKeywords.some(kw => col.includes(kw))
+                ).length;
+                
+                if (matchCount >= 2) {
+                    headerIndex = i;
+                    break;
+                }
+            }
+
+            // 4. Create a clean CSV content string starting from the header line
+            const cleanCSVContent = lines.slice(headerIndex).join('\n');
+
+            // 5. Parse using csv-parser
+            const results = [];
+            const { Readable } = require('stream');
+            const cleanStream = Readable.from([cleanCSVContent]);
+
+            cleanStream
+                .pipe(csv({
+                    separator: separator,
+                    mapHeaders: ({ header }) => header.trim().replace(/^\ufeff/, '')
+                }))
+                .on('data', (data) => results.push(data))
+                .on('end', () => resolve(results))
+                .on('error', (error) => reject(error));
+        });
     });
 };
 
