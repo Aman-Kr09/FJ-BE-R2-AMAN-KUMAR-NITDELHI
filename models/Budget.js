@@ -1,23 +1,28 @@
-const { DataTypes } = require('sequelize');
-const sequelize = require('../config/db');
+const mongoose = require('mongoose');
 
-const Budget = sequelize.define('Budget', {
-    id: {
-        type: DataTypes.UUID,
-        defaultValue: DataTypes.UUIDV4,
-        primaryKey: true
-    },
+const BudgetSchema = new mongoose.Schema({
     amount: {
-        type: DataTypes.DECIMAL(15, 2),
-        allowNull: false
+        type: Number,
+        required: true
     },
     period: {
-        type: DataTypes.STRING,
-        defaultValue: 'monthly'
+        type: String,
+        default: 'monthly'
     },
     description: {
-        type: DataTypes.TEXT
+        type: String,
+        default: ''
+    },
+    userId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
+    },
+    categoryId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Category',
+        required: true
     }
-});
+}, { timestamps: true });
 
-module.exports = Budget;
+module.exports = mongoose.model('Budget', BudgetSchema);

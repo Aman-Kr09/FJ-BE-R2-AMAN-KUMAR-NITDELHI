@@ -8,10 +8,10 @@ const isAuth = (req, res, next) => req.isAuthenticated() ? next() : res.redirect
 router.get('/', isAuth, async (req, res) => {
     try {
         const userCurrency = req.user.currency || 'USD';
-        const savings = await Saving.findAll({ where: { userId: req.user.id } });
-        const plans = await SavingPlan.findAll({ where: { userId: req.user.id } });
+        const savings = await Saving.find({ userId: req.user.id });
+        const plans = await SavingPlan.find({ userId: req.user.id });
 
-        const transactions = await Transaction.findAll({ where: { userId: req.user.id } });
+        const transactions = await Transaction.find({ userId: req.user.id });
 
         let totalIncome = 0;
         let totalExpense = 0;
@@ -35,7 +35,7 @@ router.get('/', isAuth, async (req, res) => {
             if (s.isPrimary && deficit > 0) {
                 amountInUserCurrency = Math.max(0, amountInUserCurrency - deficit);
             }
-            return { ...s.toJSON(), amount: amountInUserCurrency };
+            return { ...s.toObject(), amount: amountInUserCurrency };
         }));
 
         const totalSavings = processedSavings.reduce((acc, curr) => acc + curr.amount, 0);
@@ -77,12 +77,10 @@ router.post('/add', isAuth, async (req, res) => {
 router.put('/update', isAuth, async (req, res) => {
     try {
         const { id, source, amount, description, isPrimary } = req.body;
-        await Saving.update({
-            source,
-            amount: parseFloat(amount),
-            description,
-            isPrimary: isPrimary === 'true'
-        }, { where: { id, userId: req.user.id } });
+        await Saving.findOneAndUpdate(
+            { _id: id, userId: req.user.id },
+            { source, amount: parseFloat(amount), description, isPrimary: isPrimary === 'true' }
+        );
         res.redirect('/savings');
     } catch (err) {
         console.error(err);
@@ -92,7 +90,7 @@ router.put('/update', isAuth, async (req, res) => {
 
 router.delete('/:id', isAuth, async (req, res) => {
     try {
-        await Saving.destroy({ where: { id: req.params.id, userId: req.user.id } });
+        await Saving.findOneAndDelete({ _id: req.params.id, userId: req.user.id });
         res.redirect('/savings');
     } catch (err) {
         console.error(err);
@@ -114,9 +112,9 @@ router.post('/plan/add', isAuth, async (req, res) => {
 
 router.post('/plan/toggle/:id', isAuth, async (req, res) => {
     try {
-        const plan = await SavingPlan.findByPk(req.params.id);
-        if (plan && plan.userId === req.user.id) {
-            await plan.update({ isCompleted: !plan.isCompleted });
+        const plan = await SavingPlan.findById(req.params.id);
+        if (plan && plan.userId.toString() === req.user.id.toString()) {
+            await SavingPlan.findByIdAndUpdate(plan._id, { isCompleted: !plan.isCompleted });
         }
         res.redirect('/savings');
     } catch (err) {
@@ -127,7 +125,7 @@ router.post('/plan/toggle/:id', isAuth, async (req, res) => {
 
 router.delete('/plan/:id', isAuth, async (req, res) => {
     try {
-        await SavingPlan.destroy({ where: { id: req.params.id, userId: req.user.id } });
+        await SavingPlan.findOneAndDelete({ _id: req.params.id, userId: req.user.id });
         res.redirect('/savings');
     } catch (err) {
         console.error(err);

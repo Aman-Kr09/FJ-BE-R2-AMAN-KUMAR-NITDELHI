@@ -8,7 +8,7 @@ const isAuth = (req, res, next) => req.isAuthenticated() ? next() : res.redirect
 router.post('/update-currency', isAuth, async (req, res) => {
     try {
         const { currency } = req.body;
-        await User.update({ currency }, { where: { id: req.user.id } });
+        await User.findByIdAndUpdate(req.user.id, { currency });
         res.redirect(req.get('Referrer') || '/dashboard');
     } catch (err) {
         console.error(err);
@@ -35,9 +35,7 @@ router.post('/profile', isAuth, async (req, res) => {
             return res.redirect('/user/profile');
         }
 
-        await User.update({ name, email }, {
-            where: { id: req.user.id }
-        });
+        await User.findByIdAndUpdate(req.user.id, { name, email: email.toLowerCase() });
 
         req.flash('success', 'Profile updated successfully');
         res.redirect('/user/profile');

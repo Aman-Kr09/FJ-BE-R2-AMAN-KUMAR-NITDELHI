@@ -6,7 +6,7 @@ const { User } = require('../models');
 
 passport.use(new LocalStrategy({ usernameField: 'email' }, async (email, password, done) => {
     try {
-        const user = await User.findOne({ where: { email } });
+        const user = await User.findOne({ email: email.toLowerCase() });
         if (!user) return done(null, false, { message: 'Email not registered' });
         if (!user.password) return done(null, false, { message: 'Please login using Google' });
 
@@ -28,11 +28,11 @@ passport.use(new GoogleStrategy({
     proxy: true
 }, async (accessToken, refreshToken, profile, done) => {
     try {
-        let user = await User.findOne({ where: { googleId: profile.id } });
+        let user = await User.findOne({ googleId: profile.id });
 
         if (!user) {
             // Check if user exists with the same email
-            user = await User.findOne({ where: { email: profile.emails[0].value } });
+            user = await User.findOne({ email: profile.emails[0].value.toLowerCase() });
 
             if (user) {
                 // Link Google ID to existing account
@@ -45,7 +45,7 @@ passport.use(new GoogleStrategy({
                 user = await User.create({
                     googleId: profile.id,
                     name: profile.displayName,
-                    email: profile.emails[0].value,
+                    email: profile.emails[0].value.toLowerCase(),
                     profilePic: profile.photos[0].value,
                     isVerified: true
                 });
@@ -60,7 +60,7 @@ passport.use(new GoogleStrategy({
 passport.serializeUser((user, done) => done(null, user.id));
 passport.deserializeUser(async (id, done) => {
     try {
-        const user = await User.findByPk(id);
+        const user = await User.findById(id);
         done(null, user);
     } catch (err) {
         done(err);

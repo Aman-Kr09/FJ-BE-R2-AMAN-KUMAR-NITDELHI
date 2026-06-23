@@ -1,13 +1,10 @@
 const { Transaction, Category } = require('../models');
-const { Op } = require('sequelize');
 
 const getAnomalies = async (userId) => {
-    // 1. Fetch last 6 months of transactions for ALL data to build a baseline
-    const allTransactions = await Transaction.findAll({
-        where: { userId, type: 'expense' },
-        include: [Category],
-        order: [['date', 'DESC']]
-    });
+    // 1. Fetch all expense transactions to build a baseline
+    const allTransactions = await Transaction.find({ userId, type: 'expense' })
+        .populate('categoryId')
+        .sort({ date: -1 });
 
     if (allTransactions.length < 5) return []; // Not enough data for statistical significance
 
@@ -16,7 +13,7 @@ const getAnomalies = async (userId) => {
 
     // Group by category to find "Normal" using ALL history
     allTransactions.forEach(t => {
-        const catId = t.categoryId || 'uncategorized';
+        const catId = t.categoryId ? t.categoryId._id.toString() : 'uncategorized';
         if (!categoryGroups[catId]) categoryGroups[catId] = [];
         categoryGroups[catId].push(parseFloat(t.amount));
     });
@@ -25,7 +22,7 @@ const getAnomalies = async (userId) => {
     const targetTransactions = allTransactions.filter(t => t.isAnomalyDismissed === false);
 
     for (const t of targetTransactions) {
-        const catId = t.categoryId || 'uncategorized';
+        const catId = t.categoryId ? t.categoryId._id.toString() : 'uncategorized';
         const amounts = categoryGroups[catId];
 
         if (amounts.length >= 3) {
@@ -39,7 +36,7 @@ const getAnomalies = async (userId) => {
             if (zScore > 2.2) {
                 anomalies.push({
                     transaction: t,
-                    reason: `Unusual Spike: This is significantly higher than your typical ${t.Category?.name || 'uncategorized'} spending (Avg: $${mean.toFixed(2)})`,
+                    reason: `Unusual Spike: This is significantly higher than your typical ${t.categoryId?.name || 'uncategorized'} spending (Avg: $${mean.toFixed(2)})`,
                     severity: zScore > 4 ? 'high' : 'medium'
                 });
                 continue;
@@ -50,7 +47,7 @@ const getAnomalies = async (userId) => {
         const sameDayFrequency = allTransactions.filter(other =>
             other.date === t.date &&
             other.description.toLowerCase() === t.description.toLowerCase() &&
-            other.id !== t.id
+            other._id.toString() !== t._id.toString()
         );
 
         if (sameDayFrequency.length >= 2) {

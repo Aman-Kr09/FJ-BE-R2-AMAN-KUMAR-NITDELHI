@@ -10,29 +10,28 @@ router.get('/register', (req, res) => res.render('register', { title: 'Register'
 // Update Google callback to auto-verify since Google already verified the email
 router.get('/google/callback', passport.authenticate('google', { failureRedirect: '/auth/login' }), async (req, res) => {
     if (req.user) {
-        await req.user.update({ isVerified: true });
+        await User.findByIdAndUpdate(req.user.id, { isVerified: true });
         res.redirect('/dashboard');
     } else {
         res.redirect('/auth/login');
     }
 });
 
-// Email service imports removed as registration is now auto-verified
+// Email service imports
 const { sendOTP } = require('../services/emailService');
-const { Op } = require('sequelize');
 
 router.post('/register', async (req, res) => {
     console.log('Register request received for:', req.body.email);
     const { name, email, password } = req.body;
     try {
-        let user = await User.findOne({ where: { email } });
+        let user = await User.findOne({ email: email.toLowerCase() });
         if (user) return res.render('register', { title: 'Register', error: 'Email already registered' });
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
         const newUser = await User.create({
             name,
-            email,
+            email: email.toLowerCase(),
             password: hashedPassword,
             isVerified: true // Automatically verify
         });
@@ -43,7 +42,7 @@ router.post('/register', async (req, res) => {
             { name: 'Salary', type: 'income' }, { name: 'Investment', type: 'income' },
             { name: 'Shopping', type: 'expense' }, { name: 'Health', type: 'expense' }
         ];
-        await Category.bulkCreate(defaultCategories.map(c => ({ ...c, userId: newUser.id })));
+        await Category.insertMany(defaultCategories.map(c => ({ ...c, userId: newUser._id })));
 
         req.flash('success', 'Registration successful! You can now login.');
         res.redirect('/auth/login');
@@ -76,9 +75,8 @@ router.get('/forgot-password', (req, res) => {
 router.post('/forgot-password', async (req, res) => {
     const { email } = req.body;
     try {
-        const user = await User.findOne({ where: { email } });
+        const user = await User.findOne({ email: email.toLowerCase() });
         if (!user) {
-            // We don't want to reveal if email exists, but for UX in a take-home we might
             return res.render('forgot-password', { title: 'Forgot Password', error: 'User not found' });
         }
 
@@ -86,7 +84,7 @@ router.post('/forgot-password', async (req, res) => {
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
         const expiry = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
 
-        await user.update({ otpCode: otp, otpExpiry: expiry });
+        await User.findByIdAndUpdate(user._id, { otpCode: otp, otpExpiry: expiry });
         await sendOTP(email, otp);
 
         res.render('verify-otp', { title: 'Verify OTP', email });
@@ -100,11 +98,9 @@ router.post('/verify-otp', async (req, res) => {
     const { email, otp } = req.body;
     try {
         const user = await User.findOne({
-            where: {
-                email,
-                otpCode: otp,
-                otpExpiry: { [Op.gt]: new Date() }
-            }
+            email: email.toLowerCase(),
+            otpCode: otp,
+            otpExpiry: { $gt: new Date() }
         });
 
         if (!user) {
@@ -125,17 +121,15 @@ router.post('/reset-password', async (req, res) => {
 
     try {
         const user = await User.findOne({
-            where: {
-                email,
-                otpCode: otp,
-                otpExpiry: { [Op.gt]: new Date() }
-            }
+            email: email.toLowerCase(),
+            otpCode: otp,
+            otpExpiry: { $gt: new Date() }
         });
 
         if (!user) return res.redirect('/auth/forgot-password');
 
         const hashedPassword = await bcrypt.hash(password, 10);
-        await user.update({
+        await User.findByIdAndUpdate(user._id, {
             password: hashedPassword,
             otpCode: null,
             otpExpiry: null,

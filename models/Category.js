@@ -1,24 +1,20 @@
-const { DataTypes } = require('sequelize');
-const sequelize = require('../config/db');
+const mongoose = require('mongoose');
 
-const Category = sequelize.define('Category', {
-    id: {
-        type: DataTypes.UUID,
-        defaultValue: DataTypes.UUIDV4,
-        primaryKey: true
-    },
+const CategorySchema = new mongoose.Schema({
     name: {
-        type: DataTypes.STRING,
-        allowNull: false
+        type: String,
+        required: true
     },
     type: {
-        type: DataTypes.ENUM('income', 'expense'),
-        allowNull: false
+        type: String,
+        enum: ['income', 'expense'],
+        required: true
     },
     userId: {
-        type: DataTypes.UUID,
-        allowNull: true
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        default: null
     }
-});
+}, { timestamps: true });
 
-module.exports = Category;
+module.exports = mongoose.model('Category', CategorySchema);

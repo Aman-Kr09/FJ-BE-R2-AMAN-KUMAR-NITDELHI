@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const { Transaction, Category } = require('../models');
-const { Op } = require('sequelize');
 const { convert } = require('../services/currencyService');
 
 const isAuth = (req, res, next) => req.isAuthenticated() ? next() : res.redirect('/auth/login');
@@ -13,25 +12,20 @@ router.get('/', isAuth, async (req, res) => {
         const userCurrency = req.user.currency || 'USD';
 
         // 1. Fetch current year transactions for category breakdown
-        const transactions = await Transaction.findAll({
-            where: {
-                userId: req.user.id,
-                date: {
-                    [Op.and]: [
-                        { [Op.gte]: `${currentYear}-01-01` },
-                        { [Op.lte]: `${currentYear}-12-31` }
-                    ]
-                }
-            },
-            include: [Category]
-        });
+        const transactions = await Transaction.find({
+            userId: req.user.id,
+            date: {
+                $gte: `${currentYear}-01-01`,
+                $lte: `${currentYear}-12-31`
+            }
+        }).populate('categoryId');
 
         let totalIncome = 0;
         let totalExpense = 0;
         // Parallelize conversions for year transactions
         const transactionEntries = await Promise.all(transactions.map(async (t) => {
             const amt = await convert(parseFloat(t.amount), t.currency || 'USD', userCurrency);
-            return { ...t.toJSON(), amt, Category: t.Category };
+            return { ...t.toObject(), amt, Category: t.categoryId };
         }));
 
         const expenseCategories = {};
@@ -75,12 +69,11 @@ router.get('/', isAuth, async (req, res) => {
         const sixMonthsAgo = new Date();
         sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
         sixMonthsAgo.setDate(1);
+        const sixMonthsAgoStr = sixMonthsAgo.toISOString().split('T')[0];
 
-        const trendTransactions = await Transaction.findAll({
-            where: {
-                userId: req.user.id,
-                date: { [Op.gte]: sixMonthsAgo.toISOString().split('T')[0] }
-            }
+        const trendTransactions = await Transaction.find({
+            userId: req.user.id,
+            date: { $gte: sixMonthsAgoStr }
         });
 
         const months = [];
@@ -145,9 +138,9 @@ router.get('/anomalies', isAuth, async (req, res) => {
 
 router.post('/anomalies/dismiss/:id', isAuth, async (req, res) => {
     try {
-        await Transaction.update(
-            { isAnomalyDismissed: true },
-            { where: { id: req.params.id, userId: req.user.id } }
+        await Transaction.findOneAndUpdate(
+            { _id: req.params.id, userId: req.user.id },
+            { isAnomalyDismissed: true }
         );
         res.json({ success: true });
     } catch (err) {

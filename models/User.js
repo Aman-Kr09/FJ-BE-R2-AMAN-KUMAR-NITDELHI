@@ -1,51 +1,46 @@
-const { DataTypes } = require('sequelize');
-const sequelize = require('../config/db');
+const mongoose = require('mongoose');
 
-const User = sequelize.define('User', {
-    id: {
-        type: DataTypes.UUID,
-        defaultValue: DataTypes.UUIDV4,
-        primaryKey: true
-    },
+const UserSchema = new mongoose.Schema({
     name: {
-        type: DataTypes.STRING,
-        allowNull: false
+        type: String,
+        required: true
     },
     email: {
-        type: DataTypes.STRING,
-        allowNull: false,
+        type: String,
+        required: true,
         unique: true,
-        validate: {
-            isEmail: true
-        }
+        lowercase: true,
+        trim: true
     },
     password: {
-        type: DataTypes.STRING,
-        allowNull: true
+        type: String,
+        default: null
     },
     googleId: {
-        type: DataTypes.STRING,
-        unique: true
+        type: String,
+        default: null,
+        sparse: true
     },
     profilePic: {
-        type: DataTypes.STRING
+        type: String,
+        default: null
     },
     currency: {
-        type: DataTypes.STRING,
-        defaultValue: 'USD'
+        type: String,
+        default: 'USD'
     },
     otpCode: {
-        type: DataTypes.STRING,
-        allowNull: true
+        type: String,
+        default: null
     },
     otpExpiry: {
-        type: DataTypes.DATE,
-        allowNull: true
+        type: Date,
+        default: null
     },
     isVerified: {
-        type: DataTypes.BOOLEAN,
-        defaultValue: true
+        type: Boolean,
+        default: true
     }
-});
+}, { timestamps: true });
 
-module.exports = User;
+module.exports = mongoose.model('User', UserSchema);

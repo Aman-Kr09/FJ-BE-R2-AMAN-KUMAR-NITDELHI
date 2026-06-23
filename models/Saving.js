@@ -1,32 +1,28 @@
-const { DataTypes } = require('sequelize');
-const sequelize = require('../config/db');
+const mongoose = require('mongoose');
 
-const Saving = sequelize.define('Saving', {
-    id: {
-        type: DataTypes.UUID,
-        defaultValue: DataTypes.UUIDV4,
-        primaryKey: true
-    },
+const SavingSchema = new mongoose.Schema({
     source: {
-        type: DataTypes.STRING,
-        allowNull: false
+        type: String,
+        required: true
     },
     amount: {
-        type: DataTypes.DECIMAL(15, 2),
-        allowNull: false,
-        defaultValue: 0
+        type: Number,
+        required: true,
+        default: 0
     },
     description: {
-        type: DataTypes.TEXT
-    },
-    userId: {
-        type: DataTypes.UUID,
-        allowNull: false
+        type: String,
+        default: ''
     },
     isPrimary: {
-        type: DataTypes.BOOLEAN,
-        defaultValue: false
+        type: Boolean,
+        default: false
+    },
+    userId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
     }
-});
+}, { timestamps: true });
 
-module.exports = Saving;
+module.exports = mongoose.model('Saving', SavingSchema);

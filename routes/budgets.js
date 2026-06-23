@@ -8,30 +8,24 @@ const isAuth = (req, res, next) => req.isAuthenticated() ? next() : res.redirect
 
 router.get('/', isAuth, async (req, res) => {
     const userCurrency = req.user.currency || 'USD';
-    const budgets = await Budget.findAll({ where: { userId: req.user.id }, include: [Category] });
+    const budgets = await Budget.find({ userId: req.user.id }).populate('categoryId');
 
     // Parallelize currency conversion for display
     const processedBudgets = await Promise.all(budgets.map(async (b) => {
         const convertedAmount = await convert(parseFloat(b.amount), 'USD', userCurrency);
         return {
-            ...b.toJSON(),
+            ...b.toObject(),
             convertedAmount,
-            Category: b.Category
+            Category: b.categoryId
         };
     }));
 
-    const categories = await Category.findAll({
-        where: {
-            [require('sequelize').Op.and]: [
-                { type: 'expense' },
-                {
-                    [require('sequelize').Op.or]: [
-                        { userId: req.user.id },
-                        { userId: null }
-                    ]
-                }
-            ]
-        }
+    const categories = await Category.find({
+        type: 'expense',
+        $or: [
+            { userId: req.user.id },
+            { userId: null }
+        ]
     });
 
     res.render('budgets/index', {
@@ -50,7 +44,7 @@ router.post('/add', isAuth, async (req, res) => {
         // Convert input amount (in user's currency) back to USD for base storage
         const amountInUsd = await convert(parseFloat(amount), userCurrency, 'USD');
 
-        let budget = await Budget.findOne({ where: { userId: req.user.id, categoryId } });
+        let budget = await Budget.findOne({ userId: req.user.id, categoryId });
         if (budget) {
             budget.amount = amountInUsd;
             budget.description = description;
@@ -65,7 +59,7 @@ router.post('/add', isAuth, async (req, res) => {
         }
 
         // Send confirmation email
-        const category = await Category.findByPk(categoryId);
+        const category = await Category.findById(categoryId);
         await sendBudgetUpdate(req.user.email, category.name, parseFloat(amount), userCurrency);
 
         res.redirect('/budgets');
@@ -81,16 +75,13 @@ router.put('/update', isAuth, async (req, res) => {
         const userCurrency = req.user.currency || 'USD';
         const amountInUsd = await convert(parseFloat(amount), userCurrency, 'USD');
 
-        await Budget.update({
-            categoryId,
-            amount: amountInUsd,
-            description
-        }, {
-            where: { id, userId: req.user.id }
-        });
+        await Budget.findOneAndUpdate(
+            { _id: id, userId: req.user.id },
+            { categoryId, amount: amountInUsd, description }
+        );
 
         // Send confirmation email
-        const category = await Category.findByPk(categoryId);
+        const category = await Category.findById(categoryId);
         await sendBudgetUpdate(req.user.email, category.name, parseFloat(amount), userCurrency);
 
         res.redirect('/budgets');
@@ -101,7 +92,7 @@ router.put('/update', isAuth, async (req, res) => {
 });
 
 router.delete('/:id', isAuth, async (req, res) => {
-    await Budget.destroy({ where: { id: req.params.id, userId: req.user.id } });
+    await Budget.findOneAndDelete({ _id: req.params.id, userId: req.user.id });
     res.redirect('/budgets');
 });
 

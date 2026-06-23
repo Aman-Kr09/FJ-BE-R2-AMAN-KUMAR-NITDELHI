@@ -6,8 +6,8 @@ const passport = require('passport');
 require('./config/passport'); // Load passport config
 const methodOverride = require('method-override');
 const flash = require('express-flash');
-const sequelize = require('./config/db');
-require('./models'); // Load associations
+const connectDB = require('./config/db');
+require('./models'); // Load all Mongoose models
 
 const app = express();
 app.set('trust proxy', 1);
@@ -27,8 +27,6 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(methodOverride('_method'));
 app.use(flash());
-
-// Flash middleware
 
 app.use(session({
     secret: process.env.SESSION_SECRET || 'finance_tracker_secret',
@@ -77,35 +75,12 @@ app.get('/', (req, res) => {
     res.render('index', { title: 'Personal Finance Tracker' });
 });
 
-
-async function connectDatabaseWithRetry(maxAttempts = 5, initialDelayMs = 1000) {
-    let lastError;
-
-    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-        try {
-            await sequelize.authenticate();
-            await sequelize.sync();
-            return;
-        } catch (error) {
-            lastError = error;
-            console.error(`Database connection attempt ${attempt} of ${maxAttempts} failed:`, error.message);
-
-            if (attempt < maxAttempts) {
-                const delayMs = initialDelayMs * attempt;
-                await new Promise((resolve) => setTimeout(resolve, delayMs));
-            }
-        }
-    }
-
-    throw lastError;
-}
-
-// Database Sync & Server Start
-connectDatabaseWithRetry().then(() => {
-    console.log('Database connected and synchronized');
+// Database Connect & Server Start
+connectDB().then(() => {
     app.listen(PORT, () => {
         console.log(`Server running on http://localhost:${PORT}`);
     });
 }).catch(err => {
     console.error('Database connection failed:', err);
+    process.exit(1);
 });

@@ -1,8 +1,7 @@
 const fs = require('fs');
 const csv = require('csv-parser');
 const pdf = require('pdf-parse');
-const { Transaction, Category, sequelize } = require('../models');
-const { Op } = require('sequelize');
+const { Transaction, Category } = require('../models');
 const { getAIResponse } = require('./aiService');
 
 const parseCSV = (filePath) => {
@@ -36,14 +35,12 @@ const detectDuplicates = async (userId, transactions) => {
             }
         } catch (e) { }
 
-        // Duplicate Check: Same Date, Same Amount (2 dec), and Same Description (Case Insensitive)
+        // Duplicate Check: Same Date, Same Amount, and Same Description (Case Insensitive)
         const existing = await Transaction.findOne({
-            where: {
-                userId,
-                amount: parseFloat(trans.amount).toFixed(2),
-                date: normalizedDate,
-                description: { [Op.iLike]: trans.description.trim() }
-            }
+            userId,
+            amount: parseFloat(parseFloat(trans.amount).toFixed(2)),
+            date: normalizedDate,
+            description: { $regex: `^${trans.description.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' }
         });
 
         if (existing) {
@@ -57,7 +54,7 @@ const detectDuplicates = async (userId, transactions) => {
 };
 
 const autoCategorize = async (userId, transactions) => {
-    const categories = await Category.findAll({ where: { userId } });
+    const categories = await Category.find({ userId });
     const processedTransactions = [...transactions];
 
     for (let i = 0; i < processedTransactions.length; i++) {
@@ -108,7 +105,7 @@ const autoCategorize = async (userId, transactions) => {
         }
 
         if (found) {
-            trans.categoryId = found.id;
+            trans.categoryId = found._id;
         }
     }
 

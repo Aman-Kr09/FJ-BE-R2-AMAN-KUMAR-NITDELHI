@@ -11,25 +11,22 @@ router.get('/', isAuth, async (req, res) => {
 
         // Current month bounds
         const now = new Date();
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
 
-        const allTransactions = await Transaction.findAll({
-            where: { userId: req.user.id },
-            include: [Category],
-            order: [['date', 'DESC']]
-        });
+        const allTransactions = await Transaction.find({ userId: req.user.id })
+            .populate('categoryId')
+            .sort({ date: -1 });
 
         // Parallelize currency conversion for ALL transactions (for Recent Transactions list)
         const allConverted = await Promise.all(allTransactions.map(async (t) => {
             const amtInUserCurrency = await convert(parseFloat(t.amount), t.currency || 'USD', userCurrency);
-            return { ...t.toJSON(), amtInUserCurrency, Category: t.Category };
+            return { ...t.toObject(), amtInUserCurrency, Category: t.categoryId };
         }));
 
         // Filter for current month stats and budget progress
         const monthlyTransactions = allConverted.filter(t => {
-            const tDate = new Date(t.date);
-            return tDate >= startOfMonth && tDate <= endOfMonth;
+            return t.date >= startOfMonth && t.date <= endOfMonth;
         });
 
         let totalIncome = 0;
@@ -48,11 +45,14 @@ router.get('/', isAuth, async (req, res) => {
             }
         }
 
-        const budgets = await Budget.findAll({ where: { userId: req.user.id }, include: [Category] });
+        const budgets = await Budget.find({ userId: req.user.id }).populate('categoryId');
 
         // Parallelize budget progress calculations
         const budgetProgress = await Promise.all(budgets.map(async (b) => {
-            const categoryTransactions = monthlyTransactions.filter(t => t.categoryId === b.categoryId);
+            const catId = b.categoryId ? b.categoryId._id.toString() : null;
+            const categoryTransactions = monthlyTransactions.filter(t =>
+                t.categoryId && t.categoryId.toString() === catId
+            );
 
             // Net spent = Expenses - Incomes (Refunds/Vouchers)
             const spent = categoryTransactions.reduce((acc, t) => {
@@ -63,7 +63,7 @@ router.get('/', isAuth, async (req, res) => {
             const limitInUserCurrency = await convert(parseFloat(b.amount), 'USD', userCurrency);
 
             return {
-                category: b.Category.name,
+                category: b.categoryId ? b.categoryId.name : 'Unknown',
                 limit: limitInUserCurrency,
                 spent,
                 percent: limitInUserCurrency > 0 ? Math.min((spent / limitInUserCurrency) * 100, 100) : 0
@@ -74,7 +74,7 @@ router.get('/', isAuth, async (req, res) => {
         const savings = Math.max(0, rawBalance);
         const monthlyDeficit = rawBalance < 0 ? Math.abs(rawBalance) : 0;
 
-        const savingsData = await Saving.findAll({ where: { userId: req.user.id } });
+        const savingsData = await Saving.find({ userId: req.user.id });
 
         // Parallelize savings conversion
         const convertedSavings = await Promise.all(savingsData.map(async (s) => {

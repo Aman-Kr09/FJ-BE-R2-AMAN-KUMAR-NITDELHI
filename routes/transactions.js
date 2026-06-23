@@ -1,11 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const { Transaction, Category, Budget } = require('../models');
-const { Op } = require('sequelize');
 const multer = require('multer');
 const path = require('path');
+const { Transaction, Category, Budget } = require('../models');
 const { convert } = require('../services/currencyService');
-const { sendBudgetAlert, sendTransactionBudgetUpdate } = require('../services/emailService');
+const { sendTransactionBudgetUpdate } = require('../services/emailService');
+const { parseCSV, parsePDF, detectDuplicates, autoCategorize } = require('../services/importService');
 
 const isAuth = (req, res, next) => req.isAuthenticated() ? next() : res.redirect('/auth/login');
 
@@ -21,22 +21,20 @@ const upload = multer({ storage });
 router.get('/', isAuth, async (req, res) => {
     try {
         const userCurrency = req.user.currency || 'USD';
-        const transactions = await Transaction.findAll({
-            where: { userId: req.user.id },
-            include: [Category],
-            order: [['date', 'DESC']]
-        });
+        const transactions = await Transaction.find({ userId: req.user.id })
+            .populate('categoryId')
+            .sort({ date: -1 });
 
         const displayTransactions = await Promise.all(transactions.map(async (t) => {
             const convertedAmount = await convert(parseFloat(t.amount), t.currency || 'USD', userCurrency);
             return {
-                ...t.toJSON(),
+                ...t.toObject(),
                 convertedAmount,
-                Category: t.Category
+                Category: t.categoryId
             };
         }));
 
-        const categories = await Category.findAll({ where: { userId: req.user.id } });
+        const categories = await Category.find({ userId: req.user.id });
         res.render('transactions/index', {
             transactions: displayTransactions,
             categories,
@@ -61,22 +59,20 @@ router.post('/add', isAuth, upload.single('receipt'), async (req, res) => {
             date,
             description,
             receiptUrl,
-            categoryId,
+            categoryId: categoryId || null,
             userId: req.user.id
         });
 
-        const budget = await Budget.findOne({ where: { userId: req.user.id, categoryId } });
-        if (budget) {
+        const budget = await Budget.findOne({ userId: req.user.id, categoryId: categoryId || null });
+        if (budget && categoryId) {
             const now = new Date(date);
-            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-            const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+            const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
 
-            const monthlyCategoryTransactions = await Transaction.findAll({
-                where: {
-                    userId: req.user.id,
-                    categoryId,
-                    date: { [Op.between]: [startOfMonth.toISOString().split('T')[0], endOfMonth.toISOString().split('T')[0]] }
-                }
+            const monthlyCategoryTransactions = await Transaction.find({
+                userId: req.user.id,
+                categoryId,
+                date: { $gte: startOfMonth, $lte: endOfMonth }
             });
 
             const convertedValues = await Promise.all(monthlyCategoryTransactions.map(async (t) => {
@@ -85,7 +81,7 @@ router.post('/add', isAuth, upload.single('receipt'), async (req, res) => {
             }));
             const totalSpentUsd = convertedValues.reduce((acc, val) => acc + val, 0);
 
-            const category = await Category.findByPk(categoryId);
+            const category = await Category.findById(categoryId);
             const userCurrency = req.user.currency || 'USD';
             const limitInUserCurrency = await convert(parseFloat(budget.amount), 'USD', userCurrency);
             const spentInUserCurrency = await convert(totalSpentUsd, 'USD', userCurrency);
@@ -117,29 +113,25 @@ router.put('/update', isAuth, upload.single('receipt'), async (req, res) => {
             type,
             date,
             description,
-            categoryId
+            categoryId: categoryId || null
         };
 
         if (req.file) {
             updateData.receiptUrl = `/uploads/${req.file.filename}`;
         }
 
-        await Transaction.update(updateData, {
-            where: { id, userId: req.user.id }
-        });
+        await Transaction.findOneAndUpdate({ _id: id, userId: req.user.id }, updateData);
 
-        const budget = await Budget.findOne({ where: { userId: req.user.id, categoryId } });
-        if (budget) {
+        const budget = await Budget.findOne({ userId: req.user.id, categoryId: categoryId || null });
+        if (budget && categoryId) {
             const now = new Date(date);
-            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-            const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+            const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
 
-            const monthlyCategoryTransactions = await Transaction.findAll({
-                where: {
-                    userId: req.user.id,
-                    categoryId,
-                    date: { [Op.between]: [startOfMonth.toISOString().split('T')[0], endOfMonth.toISOString().split('T')[0]] }
-                }
+            const monthlyCategoryTransactions = await Transaction.find({
+                userId: req.user.id,
+                categoryId,
+                date: { $gte: startOfMonth, $lte: endOfMonth }
             });
 
             const convertedValues = await Promise.all(monthlyCategoryTransactions.map(async (t) => {
@@ -148,7 +140,7 @@ router.put('/update', isAuth, upload.single('receipt'), async (req, res) => {
             }));
             const totalSpentUsd = convertedValues.reduce((acc, val) => acc + val, 0);
 
-            const category = await Category.findByPk(categoryId);
+            const category = await Category.findById(categoryId);
             const userCurrency = req.user.currency || 'USD';
             const limitInUserCurrency = await convert(parseFloat(budget.amount), 'USD', userCurrency);
             const spentInUserCurrency = await convert(totalSpentUsd, 'USD', userCurrency);
@@ -173,15 +165,13 @@ router.put('/update', isAuth, upload.single('receipt'), async (req, res) => {
 
 router.delete('/:id', isAuth, async (req, res) => {
     try {
-        await Transaction.destroy({ where: { id: req.params.id, userId: req.user.id } });
+        await Transaction.findOneAndDelete({ _id: req.params.id, userId: req.user.id });
         res.redirect('/transactions');
     } catch (err) {
         console.error(err);
         res.status(500).send('Internal Server Error');
     }
 });
-
-const { parseCSV, parsePDF, detectDuplicates, autoCategorize } = require('../services/importService');
 
 router.get('/import', isAuth, (req, res) => {
     res.render('transactions/import', { title: 'Import Bank Statement' });
@@ -223,7 +213,6 @@ router.post('/import', isAuth, upload.single('statement'), async (req, res) => {
 
                 const parseAmtString = (val) => {
                     if (val === undefined || val === null || val === '') return 0;
-                    // Remove currency symbols, commas, and handle negative signs
                     const clean = val.toString().replace(/[^0-9.-]/g, '');
                     return clean ? parseFloat(clean) : 0;
                 };
@@ -232,7 +221,6 @@ router.post('/import', isAuth, upload.single('statement'), async (req, res) => {
                 const cVal = creditKey ? parseAmtString(row[creditKey]) : 0;
                 const aVal = amtKey ? parseAmtString(row[amtKey]) : 0;
 
-                // Priority: Use non-zero value from Debit/Credit columns first
                 if (dVal !== 0) {
                     amount = Math.abs(dVal);
                     type = dVal < 0 ? 'income' : 'expense';
@@ -255,7 +243,7 @@ router.post('/import', isAuth, upload.single('statement'), async (req, res) => {
                     type: type,
                     currency: req.user.currency || 'USD'
                 };
-            }).filter(t => t.amount !== 0); // Skip rows with zero amount (like Opening Balance headers)
+            }).filter(t => t.amount !== 0);
         }
 
         if (pTransactions.length === 0) {
@@ -270,7 +258,7 @@ router.post('/import', isAuth, upload.single('statement'), async (req, res) => {
             title: 'Review Import',
             transactions: uniqueTransactions,
             duplicates: identifiedDuplicates,
-            categories: await Category.findAll({ where: { userId: req.user.id } })
+            categories: await Category.find({ userId: req.user.id })
         });
     } catch (err) {
         console.error(err);

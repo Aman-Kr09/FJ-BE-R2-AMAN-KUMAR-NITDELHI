@@ -1,39 +1,46 @@
-const { DataTypes } = require('sequelize');
-const sequelize = require('../config/db');
+const mongoose = require('mongoose');
 
-const Transaction = sequelize.define('Transaction', {
-    id: {
-        type: DataTypes.UUID,
-        defaultValue: DataTypes.UUIDV4,
-        primaryKey: true
-    },
+const TransactionSchema = new mongoose.Schema({
     amount: {
-        type: DataTypes.DECIMAL(15, 2),
-        allowNull: false
+        type: Number,
+        required: true
     },
     currency: {
-        type: DataTypes.STRING,
-        defaultValue: 'USD'
+        type: String,
+        default: 'USD'
     },
     type: {
-        type: DataTypes.ENUM('income', 'expense'),
-        allowNull: false
+        type: String,
+        enum: ['income', 'expense'],
+        required: true
     },
     date: {
-        type: DataTypes.DATEONLY,
-        allowNull: false,
-        defaultValue: DataTypes.NOW
+        type: String, // stored as YYYY-MM-DD string to match existing logic
+        required: true,
+        default: () => new Date().toISOString().split('T')[0]
     },
     description: {
-        type: DataTypes.TEXT
+        type: String,
+        default: ''
     },
     receiptUrl: {
-        type: DataTypes.STRING
+        type: String,
+        default: null
     },
     isAnomalyDismissed: {
-        type: DataTypes.BOOLEAN,
-        defaultValue: false
+        type: Boolean,
+        default: false
+    },
+    userId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
+    },
+    categoryId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Category',
+        default: null
     }
-});
+}, { timestamps: true });
 
-module.exports = Transaction;
+module.exports = mongoose.model('Transaction', TransactionSchema);
