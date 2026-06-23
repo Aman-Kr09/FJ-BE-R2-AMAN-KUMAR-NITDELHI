@@ -187,9 +187,15 @@ router.post('/import', isAuth, upload.single('statement'), async (req, res) => {
         const filePath = req.file.path;
         let pTransactions = [];
 
-        if (req.file.mimetype === 'text/csv' || req.file.originalname.endsWith('.csv')) {
+        const originalNameLower = req.file.originalname.toLowerCase();
+        if (req.file.mimetype === 'text/csv' || originalNameLower.endsWith('.csv')) {
             const raw = await parseCSV(filePath);
-            pTransactions = raw.map(row => {
+            console.log(`Successfully parsed CSV. Total raw rows: ${raw.length}`);
+            if (raw.length > 0) {
+                console.log('Detected CSV keys in first row:', Object.keys(raw[0]));
+            }
+            
+            pTransactions = raw.map((row, idx) => {
                 const keys = Object.keys(row);
 
                 // Flexible column detection logic - Stricter for short codes
@@ -207,6 +213,10 @@ router.post('/import', isAuth, upload.single('statement'), async (req, res) => {
                 const debitKey = findKey(['debit', 'dr', 'withdrawal', 'paid out', 'spending', 'spent']);
                 const creditKey = findKey(['credit', 'cr', 'deposit', 'paid in', 'income', 'earned']);
                 const amtKey = findKey(['amount', 'value', 'total', 'amt']);
+
+                if (idx === 0) {
+                    console.log('Column mapping - Date:', dateKey, 'Desc:', descKey, 'Debit:', debitKey, 'Credit:', creditKey, 'Amt:', amtKey);
+                }
 
                 let amount = 0;
                 let type = 'expense';
@@ -244,7 +254,7 @@ router.post('/import', isAuth, upload.single('statement'), async (req, res) => {
                     currency: req.user.currency || 'USD'
                 };
             }).filter(t => t.amount !== 0);
-        } else if (req.file.mimetype === 'application/pdf' || req.file.originalname.endsWith('.pdf')) {
+        } else if (req.file.mimetype === 'application/pdf' || originalNameLower.endsWith('.pdf')) {
             const pdfText = await parsePDF(filePath);
             const apiKey = process.env.XAI_API_KEY;
             if (apiKey && apiKey !== 'your_grok_xai_api_key_here' && apiKey.trim() !== '') {
