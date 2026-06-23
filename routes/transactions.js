@@ -5,7 +5,7 @@ const path = require('path');
 const { Transaction, Category, Budget } = require('../models');
 const { convert } = require('../services/currencyService');
 const { sendTransactionBudgetUpdate } = require('../services/emailService');
-const { parseCSV, parsePDF, detectDuplicates, autoCategorize } = require('../services/importService');
+const { parseCSV, parsePDF, parsePDFWithAI, parsePDFWithRegex, detectDuplicates, autoCategorize } = require('../services/importService');
 
 const isAuth = (req, res, next) => req.isAuthenticated() ? next() : res.redirect('/auth/login');
 
@@ -244,6 +244,14 @@ router.post('/import', isAuth, upload.single('statement'), async (req, res) => {
                     currency: req.user.currency || 'USD'
                 };
             }).filter(t => t.amount !== 0);
+        } else if (req.file.mimetype === 'application/pdf' || req.file.originalname.endsWith('.pdf')) {
+            const pdfText = await parsePDF(filePath);
+            const apiKey = process.env.XAI_API_KEY;
+            if (apiKey && apiKey !== 'your_grok_xai_api_key_here' && apiKey.trim() !== '') {
+                pTransactions = await parsePDFWithAI(pdfText, req.user.currency || 'USD');
+            } else {
+                pTransactions = parsePDFWithRegex(pdfText, req.user.currency || 'USD');
+            }
         }
 
         if (pTransactions.length === 0) {

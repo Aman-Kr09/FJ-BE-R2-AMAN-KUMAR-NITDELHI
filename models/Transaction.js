@@ -41,6 +41,6 @@ const TransactionSchema = new mongoose.Schema({
         ref: 'Category',
         default: null
     }
-}, { timestamps: true });
+}, { timestamps: true, toJSON: { virtuals: true }, toObject: { virtuals: true } });
 
 module.exports = mongoose.model('Transaction', TransactionSchema);

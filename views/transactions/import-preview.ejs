@@ -156,7 +156,7 @@
                                                         class="category-select">
                                                         <option value="">Uncategorized</option>
                                                         <% categories.forEach(cat=> { %>
-                                                            <option value="<%= cat.id %>" <%=trans.categoryId===cat.id
+                                                            <option value="<%= cat.id %>" <%= String(trans.categoryId) === String(cat.id)
                                                                 ? 'selected' : '' %>><%= cat.name %>
                                                             </option>
                                                             <% }) %>

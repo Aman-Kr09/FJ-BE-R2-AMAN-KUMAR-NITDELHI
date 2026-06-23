@@ -23,6 +23,6 @@ const BudgetSchema = new mongoose.Schema({
         ref: 'Category',
         required: true
     }
-}, { timestamps: true });
+}, { timestamps: true, toJSON: { virtuals: true }, toObject: { virtuals: true } });
 
 module.exports = mongoose.model('Budget', BudgetSchema);

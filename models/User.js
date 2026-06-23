@@ -41,6 +41,6 @@ const UserSchema = new mongoose.Schema({
         type: Boolean,
         default: true
     }
-}, { timestamps: true });
+}, { timestamps: true, toJSON: { virtuals: true }, toObject: { virtuals: true } });
 
 module.exports = mongoose.model('User', UserSchema);
