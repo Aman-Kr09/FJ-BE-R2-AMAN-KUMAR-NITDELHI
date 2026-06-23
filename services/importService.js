@@ -235,7 +235,7 @@ const parsePDFWithRegex = (text, userCurrency) => {
     const transactions = [];
     const lines = text.split('\n');
     
-    const dateRegex = /\b(\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{2,4}|\d{1,2}[-\s][A-Za-z]{3,}[-\s]\d{2,4})\b/;
+    const dateRegex = /\b(\d{4}[-/. ]\d{1,2}[-/. ]\d{1,2}|\d{1,2}[-/. ]\d{1,2}[-/. ]\d{2,4}|\d{1,2}[-\s][A-Za-z]{3,}[-,\s]+\d{2,4}|[A-Za-z]{3,}[-\s]\d{1,2}[-,\s]+\d{2,4})\b/;
     const amountRegex = /[-+]?\b\d{1,3}(?:,\d{3})*(?:\.\d{2})\b/g;
 
     let runningBalance = null;
