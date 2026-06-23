@@ -235,11 +235,10 @@ const parsePDFWithRegex = (text, userCurrency) => {
     const transactions = [];
     const lines = text.split('\n');
     
-    // Regular expression to match dates like 2026-06-23, 23/06/2026, 06/23/2026, 23-Jun-2026, etc.
     const dateRegex = /\b(\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{2,4}|\d{1,2}[-\s][A-Za-z]{3,}[-\s]\d{2,4})\b/;
-    
-    // Regex for amounts (e.g., 1,234.56 or 1234.56 or -123.45)
-    const amountRegex = /[-+]?\b\d{1,3}(?:,\d{3})*(?:\.\d{2})\b/;
+    const amountRegex = /[-+]?\b\d{1,3}(?:,\d{3})*(?:\.\d{2})\b/g;
+
+    let runningBalance = null;
 
     for (const line of lines) {
         const dateMatch = line.match(dateRegex);
@@ -247,19 +246,13 @@ const parsePDFWithRegex = (text, userCurrency) => {
 
         const dateStr = dateMatch[0];
         
-        // Remove date from the line to parse description and amount
+        // Find all decimal amounts on the line
         const lineWithoutDate = line.replace(dateStr, '').trim();
+        const amountMatches = lineWithoutDate.match(amountRegex) || [];
         
-        // Find amounts in the line
-        const amountMatches = lineWithoutDate.match(amountRegex);
-        if (!amountMatches || amountMatches.length === 0) continue;
+        if (amountMatches.length === 0) continue;
         
-        const amountStr = amountMatches[0];
-        const cleanAmount = parseFloat(amountStr.replace(/,/g, ''));
-        if (isNaN(cleanAmount) || cleanAmount === 0) continue;
-        
-        // Description is whatever is left
-        const description = lineWithoutDate.replace(amountStr, '').replace(/\s+/g, ' ').trim() || 'PDF Transaction';
+        const numbers = amountMatches.map(m => parseFloat(m.replace(/,/g, '')));
         
         // Normalize date to YYYY-MM-DD
         let normalizedDate = new Date().toISOString().split('T')[0];
@@ -270,13 +263,52 @@ const parsePDFWithRegex = (text, userCurrency) => {
             }
         } catch (e) {}
 
-        transactions.push({
-            date: normalizedDate,
-            description: description,
-            amount: Math.abs(cleanAmount),
-            type: cleanAmount < 0 ? 'expense' : 'income',
-            currency: userCurrency
-        });
+        const description = lineWithoutDate.replace(amountRegex, '').replace(/\s+/g, ' ').trim() || 'PDF Transaction';
+
+        // Set starting balance if it is the "Previous balance" line
+        if (description.toLowerCase().includes('previous balance')) {
+            runningBalance = numbers[numbers.length - 1];
+            continue;
+        }
+
+        // If we have at least 2 numbers (amount and balance) and running balance is established
+        if (numbers.length >= 2 && runningBalance !== null) {
+            const parsedBalance = numbers[numbers.length - 1];
+            
+            // Calculate change in balance
+            const balanceChange = parseFloat((parsedBalance - runningBalance).toFixed(2));
+            const type = balanceChange < 0 ? 'expense' : 'income';
+            
+            transactions.push({
+                date: normalizedDate,
+                description: description,
+                amount: Math.abs(balanceChange),
+                type: type,
+                currency: userCurrency || 'USD'
+            });
+            
+            runningBalance = parsedBalance;
+        } else if (numbers.length >= 1) {
+            // Fallback: Use the first decimal number found as the transaction amount
+            const amt = Math.abs(numbers[0]);
+            let type = 'expense';
+            const lowercaseDesc = description.toLowerCase();
+            if (lowercaseDesc.includes('deposit') || lowercaseDesc.includes('payroll') || lowercaseDesc.includes('refund') || lowercaseDesc.includes('interest')) {
+                type = 'income';
+            }
+            
+            transactions.push({
+                date: normalizedDate,
+                description: description,
+                amount: amt,
+                type: type,
+                currency: userCurrency || 'USD'
+            });
+            
+            if (runningBalance !== null) {
+                runningBalance += (type === 'income' ? amt : -amt);
+            }
+        }
     }
     
     return transactions;
