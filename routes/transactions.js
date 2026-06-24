@@ -177,12 +177,41 @@ router.get('/import', isAuth, (req, res) => {
     res.render('transactions/import', { title: 'Import Bank Statement' });
 });
 
+// ── DEBUG: Upload a file and see exactly what text is extracted ──────────────
+// Visit /transactions/import/debug-upload , upload the file, and you'll see
+// the raw text that pdf-parse / csv-parser extracts. Remove this in production.
+router.post('/import/debug', isAuth, upload.single('statement'), async (req, res) => {
+    try {
+        if (!req.file) return res.json({ error: 'No file uploaded' });
+        const filePath  = req.file.path;
+        const nameLower = req.file.originalname.toLowerCase();
+
+        if (nameLower.endsWith('.pdf')) {
+            const rawText = await parsePDF(filePath);
+            const lines   = rawText.split('\n').map((l, i) => `${i}: ${l}`);
+            return res.type('text').send(lines.join('\n'));
+        }
+
+        if (nameLower.endsWith('.csv')) {
+            const fs      = require('fs');
+            const content = fs.readFileSync(filePath, 'utf-8');
+            return res.type('text').send(content);
+        }
+
+        return res.json({ error: 'Unsupported file type', mime: req.file.mimetype });
+    } catch (err) {
+        return res.status(500).json({ error: err.message });
+    }
+});
+
+
 router.post('/import', isAuth, upload.single('statement'), async (req, res) => {
     try {
         if (!req.file) {
             req.flash('error', 'Please upload a CSV or PDF file.');
             return res.redirect('/transactions/import');
         }
+
 
         const filePath = req.file.path;
         const userCurrency = req.user.currency || 'USD';
