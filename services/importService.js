@@ -1,9 +1,9 @@
 'use strict';
 
-const fs = require('fs');
+const fs   = require('fs');
 const path = require('path');
 const Papa = require('papaparse');
-const pdf = require('pdf-parse');
+const pdf  = require('pdf-parse');
 const axios = require('axios');
 const { Transaction, Category } = require('../models');
 
@@ -11,198 +11,146 @@ const { Transaction, Category } = require('../models');
 // UTILITIES
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Normalise any date string into YYYY-MM-DD.
- * Handles: DD/MM/YYYY, MM/DD/YYYY, DD-Mon-YY, ISO, etc.
- */
 const normalizeDate = (raw) => {
     if (!raw) return null;
     const s = raw.toString().trim();
     if (!s || s.includes('#')) return null;
-
-    // Already ISO
     if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
 
-    // DD/MM/YYYY or DD-MM-YYYY (day first – common in India/UK)
     const dmyFull = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
     if (dmyFull) {
-        const [, d, m, y] = dmyFull;
-        const candidate = new Date(`${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`);
-        if (!isNaN(candidate)) return candidate.toISOString().split('T')[0];
+        const c = new Date(`${dmyFull[3]}-${dmyFull[2].padStart(2,'0')}-${dmyFull[1].padStart(2,'0')}`);
+        if (!isNaN(c)) return c.toISOString().split('T')[0];
     }
 
-    // DD/MM/YY
     const dmyShort = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2})$/);
     if (dmyShort) {
-        const [, d, m, y] = dmyShort;
-        const year = parseInt(y) > 50 ? '19' + y : '20' + y;
-        const candidate = new Date(`${year}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`);
-        if (!isNaN(candidate)) return candidate.toISOString().split('T')[0];
+        const yr = parseInt(dmyShort[3]) > 50 ? '19' + dmyShort[3] : '20' + dmyShort[3];
+        const c  = new Date(`${yr}-${dmyShort[2].padStart(2,'0')}-${dmyShort[1].padStart(2,'0')}`);
+        if (!isNaN(c)) return c.toISOString().split('T')[0];
     }
 
-    // DD Mon YYYY  or  DD-Mon-YYYY  or  DD Mon YY (e.g. "24 Jun 2026", "24-Jun-26")
-    const monNameFull = s.match(/^(\d{1,2})[\s\-\/]([A-Za-z]{3,9})[\s\-\/,]+(\d{2,4})$/);
-    if (monNameFull) {
-        const candidate = new Date(`${monNameFull[2]} ${monNameFull[1]}, ${monNameFull[3]}`);
-        if (!isNaN(candidate)) return candidate.toISOString().split('T')[0];
+    const monName = s.match(/^(\d{1,2})[\s\-\/]([A-Za-z]{3,9})[\s\-\/,]+(\d{2,4})$/);
+    if (monName) {
+        const c = new Date(`${monName[2]} ${monName[1]}, ${monName[3]}`);
+        if (!isNaN(c)) return c.toISOString().split('T')[0];
     }
 
-    // Mon DD, YYYY  (e.g. "Jun 24, 2026")
-    const monDayYear = s.match(/^([A-Za-z]{3,9})[\s\-\.]+(\d{1,2})[,\s]+(\d{4})$/);
-    if (monDayYear) {
-        const candidate = new Date(`${monDayYear[1]} ${monDayYear[2]}, ${monDayYear[3]}`);
-        if (!isNaN(candidate)) return candidate.toISOString().split('T')[0];
+    const monDay = s.match(/^([A-Za-z]{3,9})[\s\-\.]+(\d{1,2})[,\s]+(\d{4})$/);
+    if (monDay) {
+        const c = new Date(`${monDay[1]} ${monDay[2]}, ${monDay[3]}`);
+        if (!isNaN(c)) return c.toISOString().split('T')[0];
     }
 
-    // Generic JS Date parse (last resort)
     const generic = new Date(s);
     if (!isNaN(generic)) return generic.toISOString().split('T')[0];
-
     return null;
 };
 
-/**
- * Parse a raw amount string into a float (handles commas, currency symbols, spaces).
- */
 const parseAmount = (val) => {
     if (val === undefined || val === null) return 0;
     const clean = val.toString().replace(/[^0-9.\-]/g, '');
     return clean ? parseFloat(clean) : 0;
 };
 
-/**
- * Strip BOM + trim a header string.
- */
-const cleanHeader = (h) => h.toString().trim().replace(/^\uFEFF/, '').replace(/['"]/g, '');
+const cleanHeader = (h) =>
+    h.toString().trim().replace(/^\uFEFF/, '').replace(/['"]/g, '');
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CSV PARSING  (Universal – handles any bank format)
+// CSV PARSING
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Detect which column key best matches a set of search terms.
- * Returns the matched key or undefined.
- */
 const findColumn = (keys, terms) => {
-    const lowerKeys = keys.map(k => ({ original: k, lower: cleanHeader(k).toLowerCase() }));
-    // Exact match first
+    const lk = keys.map(k => ({ original: k, lower: cleanHeader(k).toLowerCase() }));
     for (const t of terms) {
-        const exact = lowerKeys.find(k => k.lower === t.toLowerCase());
+        const exact = lk.find(k => k.lower === t.toLowerCase());
         if (exact) return exact.original;
     }
-    // Substring match second
     for (const t of terms) {
-        const sub = lowerKeys.find(k => k.lower.includes(t.toLowerCase()));
+        const sub = lk.find(k => k.lower.includes(t.toLowerCase()));
         if (sub) return sub.original;
     }
     return undefined;
 };
 
-/**
- * Parse any CSV file and return normalised transaction objects.
- * Handles:
- *  - Standard: Date, Description, Amount, Type
- *  - Debit/Credit split columns (most Indian/UK banks)
- *  - Signed single amount column (negative = expense)
- *  - Any date format
- *  - BOM headers
- *  - Quoted fields, mixed delimiters (comma, semicolon, tab, pipe)
- *  - Skips non-data header rows at the top
- */
 const parseCSV = (filePath, userCurrency = 'USD') => {
     return new Promise((resolve, reject) => {
         try {
-            // Read file as UTF-8 (handle BOM)
             let content = fs.readFileSync(filePath, 'utf-8');
             if (content.charCodeAt(0) === 0xFEFF) content = content.slice(1);
 
-            // Auto-detect delimiter
             const firstLine = content.split('\n')[0];
-            let delimiter = ',';
             const counts = {
-                ',': (firstLine.match(/,/g) || []).length,
-                ';': (firstLine.match(/;/g) || []).length,
+                ',':  (firstLine.match(/,/g)  || []).length,
+                ';':  (firstLine.match(/;/g)  || []).length,
                 '\t': (firstLine.match(/\t/g) || []).length,
-                '|': (firstLine.match(/\|/g) || []).length,
+                '|':  (firstLine.match(/\|/g) || []).length,
             };
-            delimiter = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+            const delimiter = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
 
-            // Parse with PapaParse
             const parsed = Papa.parse(content, {
-                header: false,          // We'll find the header row ourselves
+                header: false,
                 delimiter,
                 skipEmptyLines: 'greedy',
-                transformHeader: cleanHeader,
             });
 
-            if (!parsed.data || parsed.data.length === 0) {
-                return resolve([]);
-            }
+            if (!parsed.data || parsed.data.length === 0) return resolve([]);
 
-            // ── Find the real header row ──────────────────────────────────────
-            // Walk rows until we find one containing a date-like or amount-like column name
             const headerKeywords = [
-                'date', 'value date', 'posting date', 'transaction date',
-                'amount', 'debit', 'credit', 'withdrawal', 'deposit',
-                'description', 'particulars', 'narration', 'details', 'remarks',
+                'date','value date','posting date','transaction date',
+                'amount','debit','credit','withdrawal','deposit',
+                'description','particulars','narration','details','remarks',
             ];
             let headerRowIdx = 0;
             for (let i = 0; i < Math.min(parsed.data.length, 20); i++) {
                 const row = parsed.data[i];
-                const cellsLower = row.map(c => (c || '').toString().toLowerCase().trim());
-                const matches = headerKeywords.filter(kw => cellsLower.some(c => c.includes(kw)));
-                if (matches.length >= 2) { headerRowIdx = i; break; }
+                const cells = row.map(c => (c || '').toString().toLowerCase().trim());
+                if (headerKeywords.filter(kw => cells.some(c => c.includes(kw))).length >= 2) {
+                    headerRowIdx = i; break;
+                }
             }
 
-            const headers = parsed.data[headerRowIdx].map(cleanHeader);
+            const headers  = parsed.data[headerRowIdx].map(cleanHeader);
             const dataRows = parsed.data.slice(headerRowIdx + 1);
+            console.log(`[CSV] Header row ${headerRowIdx}:`, headers);
 
-            console.log(`[CSV] Header row at index ${headerRowIdx}:`, headers);
+            const dateKey   = findColumn(headers, ['date','value date','txn date','transaction date','posting date','trans date','valuedate']);
+            const descKey   = findColumn(headers, ['description','narration','particulars','remarks','details','memo','transaction details','trans desc','transaction description','narrative']);
+            const debitKey  = findColumn(headers, ['debit','withdrawal','dr','paid out','withdrawals','debit amount','withdrawal amt','debit(inr)','debit (inr)']);
+            const creditKey = findColumn(headers, ['credit','deposit','cr','paid in','deposits','credit amount','deposit amt','credit(inr)','credit (inr)']);
+            const amtKey    = findColumn(headers, ['amount','transaction amount','trans amount','amt','value','net amount']);
+            const typeKey   = findColumn(headers, ['type','transaction type','trans type','dr/cr','debit/credit']);
+            const catKey    = findColumn(headers, ['category','group','tag','classification']);
 
-            // ── Map headers to known column types ────────────────────────────
-            const dateKey   = findColumn(headers, ['date', 'value date', 'txn date', 'transaction date', 'posting date', 'trans date', 'valuedate']);
-            const descKey   = findColumn(headers, ['description', 'narration', 'particulars', 'remarks', 'details', 'memo', 'transaction details', 'trans desc', 'transaction description', 'narrative']);
-            const debitKey  = findColumn(headers, ['debit', 'withdrawal', 'dr', 'paid out', 'withdrawals', 'debit amount', 'withdrawal amt', 'debit(inr)', 'debit (inr)']);
-            const creditKey = findColumn(headers, ['credit', 'deposit', 'cr', 'paid in', 'deposits', 'credit amount', 'deposit amt', 'credit(inr)', 'credit (inr)']);
-            const amtKey    = findColumn(headers, ['amount', 'transaction amount', 'trans amount', 'amt', 'value', 'net amount']);
-            const typeKey   = findColumn(headers, ['type', 'transaction type', 'trans type', 'dr/cr', 'debit/credit']);
-            const catKey    = findColumn(headers, ['category', 'group', 'tag', 'classification']);
-
-            console.log(`[CSV] Detected columns → date:${dateKey} desc:${descKey} debit:${debitKey} credit:${creditKey} amt:${amtKey} type:${typeKey}`);
+            console.log(`[CSV] Columns → date:${dateKey} desc:${descKey} debit:${debitKey} credit:${creditKey} amt:${amtKey}`);
 
             const transactions = [];
 
             for (const row of dataRows) {
-                // Convert array row back to object using detected headers
                 const obj = {};
                 headers.forEach((h, i) => { obj[h] = (row[i] || '').toString().trim(); });
 
-                // ── Date ──────────────────────────────────────────────────────
                 const rawDate = dateKey ? obj[dateKey] : null;
-                const date = normalizeDate(rawDate);
-                if (!date) continue; // Skip rows without a valid date
+                const date    = normalizeDate(rawDate);
+                if (!date) continue;
 
-                // ── Description ───────────────────────────────────────────────
                 const description = (descKey ? obj[descKey] : '') || 'Imported Transaction';
                 if (!description.trim()) continue;
 
-                // ── Amount & Type ─────────────────────────────────────────────
                 let amount = 0;
-                let type = 'expense';
+                let type   = 'expense';
 
                 const dVal = debitKey  ? parseAmount(obj[debitKey])  : 0;
                 const cVal = creditKey ? parseAmount(obj[creditKey]) : 0;
                 const aVal = amtKey    ? parseAmount(obj[amtKey])    : 0;
 
                 if (dVal !== 0 || cVal !== 0) {
-                    // Separate debit/credit columns
-                    if (dVal > 0) { amount = dVal; type = 'expense'; }
-                    else if (cVal > 0) { amount = cVal; type = 'income'; }
-                    else if (dVal < 0) { amount = Math.abs(dVal); type = 'income'; } // reversed sign
-                    else if (cVal < 0) { amount = Math.abs(cVal); type = 'expense'; }
+                    if (dVal > 0)      { amount = dVal;          type = 'expense'; }
+                    else if (cVal > 0) { amount = cVal;          type = 'income';  }
+                    else if (dVal < 0) { amount = Math.abs(dVal); type = 'income'; }
+                    else if (cVal < 0) { amount = Math.abs(cVal); type = 'expense';}
                 } else if (aVal !== 0) {
                     amount = Math.abs(aVal);
-                    // Check a type column if present
                     if (typeKey) {
                         const tv = obj[typeKey].toLowerCase();
                         type = (tv.includes('cr') || tv.includes('credit') || tv.includes('deposit') || tv.includes('income')) ? 'income' : 'expense';
@@ -211,15 +159,15 @@ const parseCSV = (filePath, userCurrency = 'USD') => {
                     }
                 }
 
-                if (amount === 0) continue; // Skip zero-amount rows
+                if (amount === 0) continue;
 
                 transactions.push({
                     date,
                     description: description.trim(),
                     csvCategory: catKey ? obj[catKey] : '',
-                    amount: parseFloat(amount.toFixed(2)),
+                    amount:      parseFloat(amount.toFixed(2)),
                     type,
-                    currency: userCurrency,
+                    currency:    userCurrency,
                 });
             }
 
@@ -232,67 +180,53 @@ const parseCSV = (filePath, userCurrency = 'USD') => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PDF PARSING  (Universal – AI primary, robust regex fallback)
+// PDF TEXT EXTRACTION
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Extract raw text from a PDF buffer.
- * Returns { text, pageCount }.
- */
 const parsePDF = async (filePath) => {
     const buffer = fs.readFileSync(filePath);
     try {
-        const data = await pdf(buffer, {
-            // Preserve more formatting so regex has a better chance
-            normalizeWhitespace: false,
-            disableCombineTextItems: false,
-        });
-        return data.text;
+        const data = await pdf(buffer, { normalizeWhitespace: false, disableCombineTextItems: false });
+        return data.text || '';
     } catch (err) {
         console.error('[PDF] pdf-parse failed:', err.message);
         return '';
     }
 };
 
-/**
- * Use Groq / xAI to extract transactions from raw PDF text.
- */
+// ─────────────────────────────────────────────────────────────────────────────
+// PDF → AI PARSING
+// ─────────────────────────────────────────────────────────────────────────────
+
 const parsePDFWithAI = async (pdfText, userCurrency) => {
-    const apiKey = process.env.XAI_API_KEY ? process.env.XAI_API_KEY.trim() : null;
+    const apiKey = (process.env.XAI_API_KEY || '').trim();
     if (!apiKey || apiKey === 'your_grok_xai_api_key_here') {
         throw new Error('AI API key is missing or is a placeholder.');
     }
 
     let apiUrl = 'https://api.x.ai/v1/chat/completions';
     let model  = 'grok-beta';
-
     if (apiKey.startsWith('gsk_')) {
         apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
         model  = 'llama-3.3-70b-versatile';
     }
 
-    // Truncate text if too long (API limits)
     const MAX_CHARS = 12000;
-    const truncated = pdfText.length > MAX_CHARS
-        ? pdfText.slice(0, MAX_CHARS) + '\n[... text truncated ...]'
-        : pdfText;
+    const truncated = pdfText.length > MAX_CHARS ? pdfText.slice(0, MAX_CHARS) + '\n[truncated]' : pdfText;
 
     const systemPrompt = `You are a financial data extractor specializing in bank statements from any country.
-Extract ALL transactions from the provided bank statement text and return ONLY a valid JSON array.
-Do NOT include any explanation, markdown, or text outside the JSON array.
+Extract ALL transactions from the bank statement text and return ONLY a valid JSON array.
+No explanation, no markdown outside the array.
 
 Each object must have:
 - "date": "YYYY-MM-DD"
-- "description": string (transaction narration)
+- "description": string
 - "amount": positive number
 - "type": "income" or "expense"
 - "currency": "${userCurrency}" (use this unless clearly stated otherwise)
 
-Rules:
-- Credits / deposits / salary / refunds → type "income"
-- Debits / withdrawals / payments / purchases → type "expense"
-- Ignore balance rows, header rows, subtotals
-- Return [] if no transactions found`;
+Credits/deposits/salary/refunds → "income". Debits/withdrawals/payments → "expense".
+Ignore balance rows, header rows, subtotals. Return [] if none found.`;
 
     const response = await axios.post(apiUrl, {
         model,
@@ -302,142 +236,165 @@ Rules:
         ],
         temperature: 0.1,
     }, {
-        headers: {
-            Authorization: `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-        },
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         timeout: 30000,
     });
 
     const content = response.data.choices[0].message.content.trim();
-    // Strip markdown code fences if present
-    const jsonStr = content
-        .replace(/^```(?:json)?\s*/i, '')
-        .replace(/```\s*$/, '')
-        .trim();
-
-    const result = JSON.parse(jsonStr);
+    const jsonStr = content.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+    const result  = JSON.parse(jsonStr);
     return Array.isArray(result) ? result : (result.transactions || []);
 };
 
-/**
- * Universal regex-based PDF parser.
- * Works for multi-column table formats used by most banks worldwide.
- */
+// ─────────────────────────────────────────────────────────────────────────────
+// PDF → REGEX PARSING  (3-strategy cascade)
+//
+// Strategy 1 SAME-LINE:  Date + amounts on the same line (most digital PDFs)
+// Strategy 2 MULTI-LINE: Each table cell on its own consecutive line
+// Strategy 3 ANCHOR:     Date found → grab decimal amounts within ±3 lines
+// ─────────────────────────────────────────────────────────────────────────────
+
 const parsePDFWithRegex = (text, userCurrency = 'USD') => {
-    const transactions = [];
-    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    const nonEmpty = text.split('\n').map(l => l.trim()).filter(Boolean);
 
-    // Common date patterns
-    const datePatterns = [
-        /\b(\d{4}[-\/\.]\d{2}[-\/\.]\d{2})\b/,                          // YYYY-MM-DD
-        /\b(\d{2}[-\/\.]\d{2}[-\/\.]\d{4})\b/,                          // DD-MM-YYYY or MM-DD-YYYY
-        /\b(\d{2}[-\/\.]\d{2}[-\/\.]\d{2})\b/,                          // DD-MM-YY
-        /\b(\d{1,2}[\s\-](?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\s\-,]+\d{2,4})\b/i, // DD Mon YYYY
-        /\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\s\-\.]+\d{1,2}[,\s]+\d{4})\b/i, // Mon DD, YYYY
+    // Log first 600 chars so server logs show the raw layout
+    console.log('[PDF Regex] First 600 chars:\n' + text.slice(0, 600));
+
+    // ── Shared constants ───────────────────────────────────────────────────────
+    const DATE_PATS = [
+        /\b(\d{4}[-\/\.]\d{2}[-\/\.]\d{2})\b/,
+        /\b(\d{2}[-\/\.]\d{2}[-\/\.]\d{4})\b/,
+        /\b(\d{2}[-\/\.]\d{2}[-\/\.]\d{2})\b/,
+        /\b(\d{1,2}[\s\-](?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\s\-,]+\d{2,4})\b/i,
+        /\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\s\-\.]+\d{1,2}[,\s]+\d{4})\b/i,
     ];
 
-    // ── KEY FIX 1: Amount pattern REQUIRES a decimal point ──────────────────
-    // This prevents bare integers (e.g. Ref numbers like 9685) from being
-    // mistaken for transaction amounts.
-    const amountPattern = /(-?\s*\d{1,3}(?:,\d{3})*\.\d{1,2}|-?\s*\d+\.\d{1,2})/g;
+    // Amounts MUST have a decimal point (prevents Ref-number integers being picked up)
+    const AMT_PAT = /(-?\s*\d{1,3}(?:,\d{3})*\.\d{1,2}|-?\s*\d+\.\d{1,2})/g;
 
-    // ── KEY FIX 2: Expanded skip list ────────────────────────────────────────
-    // Covers "Previous balance", "*** Totals ***", common header/footer phrases
-    const skipKeywords = [
-        'statement', 'account number', 'account no',
-        'opening balance', 'closing balance', 'previous balance',
-        'total', '*** total', 'page', 'branch',
-        'ifsc', 'swift', 'sort code', 'bic',
-        'balance brought', 'brought forward',
+    const INCOME_KWS = [
+        'deposit','payroll','salary','credit','refund','interest',
+        'dividend','transfer in','received','income','reversal',
+        'cashback','reward','funds transfer - from','cr',
+    ];
+    const SKIP_KWS = [
+        'previous balance','opening balance','closing balance',
+        'brought forward','balance brought','statement period',
+        'account number','account no','sort code','swift','bic','ifsc',
+        'date description','withdrawals deposits','debit credit','dr cr',
     ];
 
-    for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        const lineLower = line.toLowerCase().trim();
-
-        // Skip lines starting with *** (e.g. "*** Totals ***")
-        if (line.trim().startsWith('***')) continue;
-
-        if (skipKeywords.some(kw => lineLower.startsWith(kw) || lineLower === kw)) continue;
-
-        // Find date in line
-        let dateStr = null;
-        let dateMatchStr = '';
-        for (const pat of datePatterns) {
-            const m = line.match(pat);
-            if (m) { dateStr = normalizeDate(m[1] || m[0]); dateMatchStr = m[0]; break; }
+    const findDate = (str) => {
+        for (const p of DATE_PATS) {
+            const m = str.match(p);
+            if (m) return { raw: m[0], normalized: normalizeDate(m[1] || m[0]) };
         }
-        if (!dateStr) continue;
+        return null;
+    };
 
-        // Find all DECIMAL amounts in the line (after removing the date)
-        // Integers (Ref numbers etc.) are intentionally ignored
-        const lineWithoutDate = line.replace(dateMatchStr, '').trim();
-        const amountMatches = [...lineWithoutDate.matchAll(amountPattern)];
-        if (amountMatches.length === 0) continue;
+    const shouldSkip = (str) => {
+        const l = str.toLowerCase().trim();
+        if (l.startsWith('***') || l.startsWith('---')) return true;
+        return SKIP_KWS.some(kw => l.includes(kw));
+    };
 
-        const decimalNums = amountMatches.map(m => parseFloat(m[0].replace(/,|\s/g, '')));
+    const isIncome = (str) => INCOME_KWS.some(kw => str.toLowerCase().includes(kw));
 
-        // Description = everything that's not a date, a decimal amount, or a bare integer ref
-        let description = lineWithoutDate
-            .replace(amountPattern, '')       // remove decimal amounts
-            .replace(/\b\d{4,6}\b/g, '')     // remove bare 4-6 digit Ref numbers (not short numbers like cheque #409)
+    const makeResult = (dateInfo, rawText, blockForType) => {
+        const amounts = [...rawText.matchAll(AMT_PAT)];
+        if (amounts.length === 0) return null;
+        const nums   = amounts.map(m => parseFloat(m[0].replace(/[\s,]/g, '')));
+        const amount = Math.abs(nums[0]);
+        if (amount === 0) return null;
+        let desc = rawText
+            .replace(dateInfo.raw, '')
+            .replace(AMT_PAT, '')
+            .replace(/\b\d{4,6}\b/g, '')
             .replace(/\s{2,}/g, ' ')
-            .trim();
-        if (!description) description = 'PDF Transaction';
-        if (description.length < 2) continue;
-
-        // Skip obvious non-transaction lines (balance-only or previous-balance descriptions)
-        if (/^(balance|bal\.?|closing|opening|previous|previous balance)\s*:?$/i.test(description)) continue;
-        if (/^previous\s+balance/i.test(description)) continue;
-
-        // ── KEY FIX 3: Multi-column logic ────────────────────────────────────
-        // Bank statements typically have: [transaction amount] [running balance]
-        // When two decimals are found: first = transaction, last = balance
-        // When one decimal is found: that IS the transaction amount
-        let amount = 0;
-        let type = 'expense';
-
-        const incomeKeywords = [
-            'deposit', 'payroll', 'salary', 'credit', 'refund',
-            'interest', 'dividend', 'transfer in', 'received', 'income',
-            'reversal', 'cashback', 'reward', 'funds transfer - from',
-        ];
-        const isIncomeLine = incomeKeywords.some(kw => lineLower.includes(kw));
-
-        if (decimalNums.length >= 2) {
-            // First decimal = transaction amount, last = running balance
-            // (ignore the balance for type detection)
-            amount = Math.abs(decimalNums[0]);
-            type = isIncomeLine ? 'income' : 'expense';
-        } else {
-            amount = Math.abs(decimalNums[0]);
-            const rawNum = amountMatches[0][0].replace(/[\s,]/g, '');
-            type = (rawNum.startsWith('+') || isIncomeLine) ? 'income' : 'expense';
-        }
-
-        if (amount === 0) continue;
-
-        transactions.push({
-            date: dateStr,
-            description,
-            amount: parseFloat(amount.toFixed(2)),
-            type,
+            .trim() || 'Transaction';
+        if (shouldSkip(desc)) return null;
+        if (desc.length < 2) return null;
+        return {
+            date:     dateInfo.normalized,
+            description: desc.slice(0, 100),
+            amount:   parseFloat(amount.toFixed(2)),
+            type:     isIncome(blockForType || rawText) ? 'income' : 'expense',
             currency: userCurrency,
+        };
+    };
+
+    const dedupe = (arr) => {
+        const seen = new Set();
+        return arr.filter(t => {
+            const k = `${t.date}|${t.amount}|${t.description.slice(0, 25)}`;
+            if (seen.has(k)) return false;
+            seen.add(k);
+            return true;
         });
-    }
+    };
 
-    // Deduplicate: remove entries with identical date+amount+description
-    const seen = new Set();
-    const unique = transactions.filter(t => {
-        const key = `${t.date}|${t.amount}|${t.description.slice(0, 30)}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-    });
+    // ── Strategy 1: Same-line ──────────────────────────────────────────────────
+    const strategy1 = () => {
+        const out = [];
+        for (const line of nonEmpty) {
+            if (shouldSkip(line)) continue;
+            const di = findDate(line);
+            if (!di || !di.normalized) continue;
+            const r = makeResult(di, line, line);
+            if (r) out.push(r);
+        }
+        console.log(`[PDF S1] ${out.length} transactions`);
+        return out;
+    };
 
-    console.log(`[PDF Regex] Extracted ${unique.length} transactions`);
-    return unique;
+    // ── Strategy 2: Multi-line blocks ─────────────────────────────────────────
+    const strategy2 = () => {
+        const out = [];
+        let i = 0;
+        while (i < nonEmpty.length) {
+            const line = nonEmpty[i];
+            if (shouldSkip(line)) { i++; continue; }
+            const di = findDate(line);
+            if (!di || !di.normalized) { i++; continue; }
+
+            // Collect up to 4 more lines as this transaction's block
+            const block = [line];
+            for (let j = 1; j <= 4 && (i + j) < nonEmpty.length; j++) {
+                if (findDate(nonEmpty[i + j])) break;
+                block.push(nonEmpty[i + j]);
+            }
+            const blockText = block.join(' ');
+            const r = makeResult(di, blockText, blockText);
+            if (r) out.push(r);
+            i += block.length;
+        }
+        console.log(`[PDF S2] ${out.length} transactions`);
+        return out;
+    };
+
+    // ── Strategy 3: Date-anchor sweep (last resort) ────────────────────────────
+    const strategy3 = () => {
+        const out = [];
+        for (let i = 0; i < nonEmpty.length; i++) {
+            const line = nonEmpty[i];
+            if (shouldSkip(line)) continue;
+            const di = findDate(line);
+            if (!di || !di.normalized) continue;
+            const context = nonEmpty.slice(i, i + 4).join(' ');
+            const r = makeResult(di, context, context);
+            if (r) out.push(r);
+        }
+        console.log(`[PDF S3] ${out.length} transactions`);
+        return out;
+    };
+
+    let result = strategy1();
+    if (result.length === 0) result = strategy2();
+    if (result.length === 0) result = strategy3();
+
+    const final = dedupe(result);
+    console.log(`[PDF Regex] Final: ${final.length} unique transactions`);
+    return final;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -455,7 +412,7 @@ const detectDuplicates = async (userId, transactions) => {
             amount: parseFloat(parseFloat(trans.amount).toFixed(2)),
             date:   normalizedDate,
             description: {
-                $regex: `^${trans.description.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`,
+                $regex:   `^${trans.description.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`,
                 $options: 'i',
             },
         });
@@ -478,71 +435,57 @@ const autoCategorize = async (userId, transactions) => {
     const categories = await Category.find({ userId });
     const processed  = [...transactions];
 
-    // Expanded keyword map covering Indian + global merchants
     const keywordMap = {
         // Food & Dining
-        'zomato': 'Food', 'swiggy': 'Food', 'dominos': 'Food', 'pizza': 'Food',
-        'mcdonald': 'Food', 'burger': 'Food', 'kfc': 'Food', 'starbucks': 'Food',
-        'cafe': 'Food', 'restaurant': 'Food', 'hotel food': 'Food',
+        'zomato':'Food','swiggy':'Food','dominos':'Food','pizza':'Food',
+        'mcdonald':'Food','burger':'Food','kfc':'Food','starbucks':'Food',
+        'cafe':'Food','restaurant':'Food',
         // Groceries
-        'walmart': 'Groceries', 'bigbasket': 'Groceries', 'grofer': 'Groceries',
-        'dmart': 'Groceries', 'reliance fresh': 'Groceries', 'more supermarket': 'Groceries',
-        'grocery': 'Groceries', 'supermarket': 'Groceries',
+        'walmart':'Groceries','bigbasket':'Groceries','grofer':'Groceries',
+        'dmart':'Groceries','reliance fresh':'Groceries','grocery':'Groceries',
+        'supermarket':'Groceries',
         // Shopping
-        'amazon': 'Shopping', 'flipkart': 'Shopping', 'myntra': 'Shopping',
-        'ajio': 'Shopping', 'target': 'Shopping', 'mall': 'Shopping',
+        'amazon':'Shopping','flipkart':'Shopping','myntra':'Shopping',
+        'ajio':'Shopping','target':'Shopping','mall':'Shopping',
         // Entertainment
-        'netflix': 'Entertainment', 'spotify': 'Entertainment', 'youtube': 'Entertainment',
-        'hotstar': 'Entertainment', 'prime video': 'Entertainment', 'jiocinema': 'Entertainment',
-        'bookmyshow': 'Entertainment', 'cinema': 'Entertainment',
+        'netflix':'Entertainment','spotify':'Entertainment','youtube':'Entertainment',
+        'hotstar':'Entertainment','prime video':'Entertainment','jiocinema':'Entertainment',
+        'bookmyshow':'Entertainment','cinema':'Entertainment',
         // Transport
-        'uber': 'Transport', 'ola': 'Transport', 'lyft': 'Transport',
-        'rapido': 'Transport', 'metro': 'Transport', 'irctc': 'Transport',
-        'indigo': 'Transport', 'air india': 'Transport', 'makemytrip': 'Transport',
-        'petrol': 'Transport', 'fuel': 'Transport',
+        'uber':'Transport','ola':'Transport','lyft':'Transport',
+        'rapido':'Transport','metro':'Transport','irctc':'Transport',
+        'indigo':'Transport','air india':'Transport','makemytrip':'Transport',
+        'petrol':'Transport','fuel':'Transport',
         // Utilities
-        'electric': 'Utilities', 'water bill': 'Utilities', 'internet': 'Utilities',
-        'broadband': 'Utilities', 'airtel': 'Utilities', 'jio': 'Utilities',
-        'bsnl': 'Utilities', 'vi ': 'Utilities', 'vodafone': 'Utilities',
-        'bescom': 'Utilities', 'gas bill': 'Utilities',
+        'electric':'Utilities','water bill':'Utilities','internet':'Utilities',
+        'broadband':'Utilities','airtel':'Utilities','jio':'Utilities',
+        'bsnl':'Utilities','vodafone':'Utilities','bescom':'Utilities',
         // Housing
-        'rent': 'Housing', 'apartment': 'Housing', 'mortgage': 'Housing', 'nobroker': 'Housing',
+        'rent':'Housing','apartment':'Housing','mortgage':'Housing',
         // Income
-        'salary': 'Salary', 'payroll': 'Salary', 'depo': 'Salary',
-        'dividend': 'Salary', 'credit from': 'Salary',
+        'salary':'Salary','payroll':'Salary','depo':'Salary',
+        'dividend':'Salary','credit from':'Salary',
         // Health
-        'pharmacy': 'Health', 'hospital': 'Health', 'clinic': 'Health',
-        'medical': 'Health', 'apollo': 'Health', 'practo': 'Health',
+        'pharmacy':'Health','hospital':'Health','clinic':'Health',
+        'medical':'Health','apollo':'Health','practo':'Health',
         // Education
-        'school': 'Education', 'college': 'Education', 'university': 'Education',
-        'course': 'Education', 'udemy': 'Education', 'coursera': 'Education',
+        'school':'Education','college':'Education','university':'Education',
+        'course':'Education','udemy':'Education','coursera':'Education',
     };
 
-    for (let i = 0; i < processed.length; i++) {
-        const trans = processed[i];
+    for (const trans of processed) {
         let found = null;
 
-        // 1. CSV already has a category matching DB
         if (trans.csvCategory) {
             found = categories.find(c => c.name.toLowerCase() === trans.csvCategory.toLowerCase());
         }
-
-        // 2. Description contains a category name
         if (!found) {
-            found = categories.find(c =>
-                trans.description.toLowerCase().includes(c.name.toLowerCase())
-            );
+            found = categories.find(c => trans.description.toLowerCase().includes(c.name.toLowerCase()));
         }
-
-        // 3. Keyword map fallback
         if (!found) {
             const descLower = trans.description.toLowerCase();
-            const keyword   = Object.keys(keywordMap).find(k => descLower.includes(k));
-            if (keyword) {
-                found = categories.find(c =>
-                    c.name.toLowerCase() === keywordMap[keyword].toLowerCase()
-                );
-            }
+            const kw = Object.keys(keywordMap).find(k => descLower.includes(k));
+            if (kw) found = categories.find(c => c.name.toLowerCase() === keywordMap[kw].toLowerCase());
         }
 
         if (found) trans.categoryId = found._id.toString();
