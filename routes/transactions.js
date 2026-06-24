@@ -185,87 +185,37 @@ router.post('/import', isAuth, upload.single('statement'), async (req, res) => {
         }
 
         const filePath = req.file.path;
+        const userCurrency = req.user.currency || 'USD';
         let pTransactions = [];
 
         const originalNameLower = req.file.originalname.toLowerCase();
+
         if (req.file.mimetype === 'text/csv' || originalNameLower.endsWith('.csv')) {
-            const raw = await parseCSV(filePath);
-            console.log(`Successfully parsed CSV. Total raw rows: ${raw.length}`);
-            if (raw.length > 0) {
-                console.log('Detected CSV keys in first row:', Object.keys(raw[0]));
-            }
-            
-            pTransactions = raw.map((row, idx) => {
-                const keys = Object.keys(row);
+            // parseCSV now handles ALL column detection, date normalisation, and type inference internally
+            pTransactions = await parseCSV(filePath, userCurrency);
+            console.log(`[Import] CSV parsed: ${pTransactions.length} transactions extracted`);
 
-                // Flexible column detection logic - Stricter for short codes
-                const findKey = (terms) => keys.find(k => {
-                    const l = k.trim().toLowerCase();
-                    return terms.some(t => {
-                        if (t.length <= 2) return l === t || l.startsWith(t + ' ') || l.endsWith(' ' + t) || l.includes(' ' + t + ' ');
-                        return l === t || (l.includes(t) && !l.includes('date') && !l.includes('category') && !l.includes('balance'));
-                    });
-                });
-
-                const dateKey = findKey(['date', 'time']);
-                const descKey = findKey(['desc', 'particulars', 'remarks', 'trans']);
-                const catKey = findKey(['category', 'group', 'tag']);
-                const debitKey = findKey(['debit', 'dr', 'withdrawal', 'paid out', 'spending', 'spent']);
-                const creditKey = findKey(['credit', 'cr', 'deposit', 'paid in', 'income', 'earned']);
-                const amtKey = findKey(['amount', 'value', 'total', 'amt']);
-
-                if (idx === 0) {
-                    console.log('Column mapping - Date:', dateKey, 'Desc:', descKey, 'Debit:', debitKey, 'Credit:', creditKey, 'Amt:', amtKey);
-                }
-
-                let amount = 0;
-                let type = 'expense';
-
-                const parseAmtString = (val) => {
-                    if (val === undefined || val === null || val === '') return 0;
-                    const clean = val.toString().replace(/[^0-9.-]/g, '');
-                    return clean ? parseFloat(clean) : 0;
-                };
-
-                const dVal = debitKey ? parseAmtString(row[debitKey]) : 0;
-                const cVal = creditKey ? parseAmtString(row[creditKey]) : 0;
-                const aVal = amtKey ? parseAmtString(row[amtKey]) : 0;
-
-                if (dVal !== 0) {
-                    amount = Math.abs(dVal);
-                    type = dVal < 0 ? 'income' : 'expense';
-                } else if (cVal !== 0) {
-                    amount = Math.abs(cVal);
-                    type = cVal < 0 ? 'expense' : 'income';
-                } else if (aVal !== 0) {
-                    amount = Math.abs(aVal);
-                    type = aVal < 0 ? 'expense' : 'income';
-                }
-
-                let dateStr = row[dateKey] || new Date().toISOString().split('T')[0];
-                if (dateStr.toString().includes('#')) dateStr = new Date().toISOString().split('T')[0];
-
-                return {
-                    date: dateStr,
-                    description: (row[descKey] || 'Imported Transaction').trim(),
-                    csvCategory: row[catKey] || '',
-                    amount: amount,
-                    type: type,
-                    currency: req.user.currency || 'USD'
-                };
-            }).filter(t => t.amount !== 0);
         } else if (req.file.mimetype === 'application/pdf' || originalNameLower.endsWith('.pdf')) {
             const pdfText = await parsePDF(filePath);
-            const apiKey = process.env.XAI_API_KEY;
-            if (apiKey && apiKey !== 'your_grok_xai_api_key_here' && apiKey.trim() !== '') {
-                pTransactions = await parsePDFWithAI(pdfText, req.user.currency || 'USD');
+            console.log(`[Import] PDF text length: ${pdfText.length} chars`);
+
+            const apiKey = (process.env.XAI_API_KEY || '').trim();
+            if (apiKey && apiKey !== 'your_grok_xai_api_key_here') {
+                try {
+                    pTransactions = await parsePDFWithAI(pdfText, userCurrency);
+                    console.log(`[Import] AI extracted ${pTransactions.length} transactions`);
+                } catch (aiErr) {
+                    console.warn('[Import] AI parsing failed, falling back to regex:', aiErr.message);
+                    pTransactions = parsePDFWithRegex(pdfText, userCurrency);
+                }
             } else {
-                pTransactions = parsePDFWithRegex(pdfText, req.user.currency || 'USD');
+                pTransactions = parsePDFWithRegex(pdfText, userCurrency);
             }
+            console.log(`[Import] PDF parsed: ${pTransactions.length} transactions extracted`);
         }
 
         if (pTransactions.length === 0) {
-            req.flash('error', 'No transactions found in the file.');
+            req.flash('error', 'No transactions found in the file. Make sure it is a valid bank statement.');
             return res.redirect('/transactions/import');
         }
 
@@ -279,7 +229,7 @@ router.post('/import', isAuth, upload.single('statement'), async (req, res) => {
             categories: await Category.find({ userId: req.user.id })
         });
     } catch (err) {
-        console.error(err);
+        console.error('[Import Error]', err);
         req.flash('error', 'Error processing file: ' + err.message);
         res.redirect('/transactions/import');
     }
