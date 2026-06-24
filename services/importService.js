@@ -337,16 +337,27 @@ const parsePDFWithRegex = (text, userCurrency = 'USD') => {
         /\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\s\-\.]+\d{1,2}[,\s]+\d{4})\b/i, // Mon DD, YYYY
     ];
 
-    // Amount pattern: optional sign, digits with commas, mandatory decimal
-    const amountPattern = /([+-]?\s*\d{1,3}(?:,\d{3})*(?:\.\d{1,2})|[+-]?\s*\d+\.\d{1,2})/g;
+    // ── KEY FIX 1: Amount pattern REQUIRES a decimal point ──────────────────
+    // This prevents bare integers (e.g. Ref numbers like 9685) from being
+    // mistaken for transaction amounts.
+    const amountPattern = /(-?\s*\d{1,3}(?:,\d{3})*\.\d{1,2}|-?\s*\d+\.\d{1,2})/g;
 
-    // Skip lines that are obviously headers or footers
-    const skipKeywords = ['statement', 'account number', 'account no', 'opening balance', 'closing balance',
-                          'total', 'page', 'branch', 'ifsc', 'swift', 'sort code', 'bic'];
+    // ── KEY FIX 2: Expanded skip list ────────────────────────────────────────
+    // Covers "Previous balance", "*** Totals ***", common header/footer phrases
+    const skipKeywords = [
+        'statement', 'account number', 'account no',
+        'opening balance', 'closing balance', 'previous balance',
+        'total', '*** total', 'page', 'branch',
+        'ifsc', 'swift', 'sort code', 'bic',
+        'balance brought', 'brought forward',
+    ];
 
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
-        const lineLower = line.toLowerCase();
+        const lineLower = line.toLowerCase().trim();
+
+        // Skip lines starting with *** (e.g. "*** Totals ***")
+        if (line.trim().startsWith('***')) continue;
 
         if (skipKeywords.some(kw => lineLower.startsWith(kw) || lineLower === kw)) continue;
 
@@ -359,41 +370,48 @@ const parsePDFWithRegex = (text, userCurrency = 'USD') => {
         }
         if (!dateStr) continue;
 
-        // Find all amounts in the line (after removing the date)
+        // Find all DECIMAL amounts in the line (after removing the date)
+        // Integers (Ref numbers etc.) are intentionally ignored
         const lineWithoutDate = line.replace(dateMatchStr, '').trim();
         const amountMatches = [...lineWithoutDate.matchAll(amountPattern)];
         if (amountMatches.length === 0) continue;
 
-        const numbers = amountMatches.map(m => parseFloat(m[0].replace(/,|\s/g, '')));
+        const decimalNums = amountMatches.map(m => parseFloat(m[0].replace(/,|\s/g, '')));
 
-        // Description = everything that's not a date or a number
+        // Description = everything that's not a date, a decimal amount, or a bare integer ref
         let description = lineWithoutDate
-            .replace(amountPattern, '')
+            .replace(amountPattern, '')       // remove decimal amounts
+            .replace(/\b\d{4,6}\b/g, '')     // remove bare 4-6 digit Ref numbers (not short numbers like cheque #409)
             .replace(/\s{2,}/g, ' ')
             .trim();
         if (!description) description = 'PDF Transaction';
         if (description.length < 2) continue;
 
-        // Skip obvious non-transaction lines (balance only)
-        if (/^(balance|bal\.?|closing|opening)\s*:?$/i.test(description)) continue;
+        // Skip obvious non-transaction lines (balance-only or previous-balance descriptions)
+        if (/^(balance|bal\.?|closing|opening|previous|previous balance)\s*:?$/i.test(description)) continue;
+        if (/^previous\s+balance/i.test(description)) continue;
 
-        // Determine type & amount using heuristics
+        // ── KEY FIX 3: Multi-column logic ────────────────────────────────────
+        // Bank statements typically have: [transaction amount] [running balance]
+        // When two decimals are found: first = transaction, last = balance
+        // When one decimal is found: that IS the transaction amount
         let amount = 0;
         let type = 'expense';
 
-        const incomeKeywords = ['credit', 'cr', 'deposit', 'salary', 'payroll', 'refund',
-                                'interest', 'dividend', 'transfer in', 'received', 'income',
-                                'reversal', 'cashback', 'reward'];
+        const incomeKeywords = [
+            'deposit', 'payroll', 'salary', 'credit', 'refund',
+            'interest', 'dividend', 'transfer in', 'received', 'income',
+            'reversal', 'cashback', 'reward', 'funds transfer - from',
+        ];
         const isIncomeLine = incomeKeywords.some(kw => lineLower.includes(kw));
 
-        if (numbers.length >= 2) {
-            // Try balance-diff approach: last number is running balance
-            // Use the FIRST number as the transaction amount (most formats)
-            amount = Math.abs(numbers[0]);
-            // Override type based on keywords
+        if (decimalNums.length >= 2) {
+            // First decimal = transaction amount, last = running balance
+            // (ignore the balance for type detection)
+            amount = Math.abs(decimalNums[0]);
             type = isIncomeLine ? 'income' : 'expense';
         } else {
-            amount = Math.abs(numbers[0]);
+            amount = Math.abs(decimalNums[0]);
             const rawNum = amountMatches[0][0].replace(/[\s,]/g, '');
             type = (rawNum.startsWith('+') || isIncomeLine) ? 'income' : 'expense';
         }
