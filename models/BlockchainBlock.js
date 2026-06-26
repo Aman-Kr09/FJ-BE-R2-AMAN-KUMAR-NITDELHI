@@ -21,6 +21,17 @@ const BlockchainBlockSchema = new mongoose.Schema({
         ref: 'Transaction',
         default: null
     },
+    // Block type: 'genesis' | 'transaction' | 'amendment' | 'deletion'
+    eventType: {
+        type: String,
+        enum: ['genesis', 'transaction', 'amendment', 'deletion'],
+        default: 'transaction'
+    },
+    // For amendment/deletion blocks: hash of the original block being superseded
+    amendedBlockHash: {
+        type: String,
+        default: null
+    },
     previousHash: {
         type: String,
         required: true
@@ -43,3 +54,4 @@ const BlockchainBlockSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 module.exports = mongoose.model('BlockchainBlock', BlockchainBlockSchema);
+

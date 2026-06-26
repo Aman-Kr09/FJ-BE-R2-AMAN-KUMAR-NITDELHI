@@ -52,6 +52,7 @@ async function initBlockchain() {
             timestamp,
             data,
             transactionId: null,
+            eventType: 'genesis',
             previousHash,
             hash,
             nonce,
@@ -93,6 +94,7 @@ async function addTransactionBlock(transaction) {
         timestamp,
         data,
         transactionId: transaction._id,
+        eventType: 'transaction',
         previousHash,
         hash,
         nonce,
@@ -100,6 +102,105 @@ async function addTransactionBlock(transaction) {
     });
 
     console.log(`[Blockchain] Block #${index} mined — Hash: ${hash.substring(0, 16)}... (nonce: ${nonce})`);
+    return block;
+}
+
+/**
+ * Add an AMENDMENT block when a transaction is edited via the website.
+ * Records before/after snapshot. Original block is untouched — the chain stays valid.
+ * @param {Object} oldTransaction - The transaction document BEFORE the edit (fetched before update)
+ * @param {Object} newData        - The new field values being applied
+ * @param {String} originalBlockHash - Hash of the original block being amended
+ */
+async function addAmendmentBlock(oldTransaction, newData, originalBlockHash) {
+    const latest = await getLatestBlock();
+    if (!latest) throw new Error('Blockchain not initialized.');
+
+    const index = latest.index + 1;
+    const timestamp = new Date().toISOString();
+    const data = {
+        eventType: 'AMENDMENT',
+        transactionId: oldTransaction._id.toString(),
+        userId: oldTransaction.userId.toString(),
+        amendedBlockHash: originalBlockHash || null,
+        // Full before/after snapshot for audit trail
+        before: {
+            amount:      oldTransaction.amount,
+            currency:    oldTransaction.currency || 'USD',
+            type:        oldTransaction.type,
+            description: oldTransaction.description || '',
+            date:        oldTransaction.date,
+        },
+        after: {
+            amount:      parseFloat(newData.amount),
+            currency:    newData.currency || 'USD',
+            type:        newData.type,
+            description: newData.description || '',
+            date:        newData.date,
+        }
+    };
+    const previousHash = latest.hash;
+    const { hash, nonce } = mineBlock(index, timestamp, data, previousHash);
+
+    const block = await BlockchainBlock.create({
+        index,
+        timestamp,
+        data,
+        transactionId: oldTransaction._id,
+        eventType: 'amendment',
+        amendedBlockHash: originalBlockHash || null,
+        previousHash,
+        hash,
+        nonce,
+        difficulty: DIFFICULTY
+    });
+
+    console.log(`[Blockchain] Amendment Block #${index} mined for tx ${oldTransaction._id} — nonce: ${nonce}`);
+    return block;
+}
+
+/**
+ * Add a DELETION block when a transaction is deleted via the website.
+ * Records the deleted transaction snapshot permanently.
+ * @param {Object} transaction - The transaction document being deleted
+ * @param {String} originalBlockHash - Hash of the original block for this transaction
+ */
+async function addDeletionBlock(transaction, originalBlockHash) {
+    const latest = await getLatestBlock();
+    if (!latest) throw new Error('Blockchain not initialized.');
+
+    const index = latest.index + 1;
+    const timestamp = new Date().toISOString();
+    const data = {
+        eventType: 'DELETION',
+        transactionId: transaction._id.toString(),
+        userId: transaction.userId.toString(),
+        amendedBlockHash: originalBlockHash || null,
+        deletedSnapshot: {
+            amount:      transaction.amount,
+            currency:    transaction.currency || 'USD',
+            type:        transaction.type,
+            description: transaction.description || '',
+            date:        transaction.date,
+        }
+    };
+    const previousHash = latest.hash;
+    const { hash, nonce } = mineBlock(index, timestamp, data, previousHash);
+
+    const block = await BlockchainBlock.create({
+        index,
+        timestamp,
+        data,
+        transactionId: transaction._id,
+        eventType: 'deletion',
+        amendedBlockHash: originalBlockHash || null,
+        previousHash,
+        hash,
+        nonce,
+        difficulty: DIFFICULTY
+    });
+
+    console.log(`[Blockchain] Deletion Block #${index} mined for tx ${transaction._id} — nonce: ${nonce}`);
     return block;
 }
 
@@ -162,6 +263,8 @@ async function getAllBlocks() {
 module.exports = {
     initBlockchain,
     addTransactionBlock,
+    addAmendmentBlock,
+    addDeletionBlock,
     verifyChain,
     getAllBlocks,
     getLatestBlock,

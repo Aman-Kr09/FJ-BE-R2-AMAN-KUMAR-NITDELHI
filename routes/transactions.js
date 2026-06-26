@@ -6,7 +6,7 @@ const { Transaction, Category, Budget } = require('../models');
 const { convert } = require('../services/currencyService');
 const { sendTransactionBudgetUpdate } = require('../services/emailService');
 const { parseCSV, parsePDF, parsePDFWithAI, parsePDFWithRegex, detectDuplicates, autoCategorize } = require('../services/importService');
-const { addTransactionBlock } = require('../services/blockchainService');
+const { addTransactionBlock, addAmendmentBlock, addDeletionBlock } = require('../services/blockchainService');
 
 const isAuth = (req, res, next) => req.isAuthenticated() ? next() : res.redirect('/auth/login');
 
@@ -137,6 +137,10 @@ router.post('/add', isAuth, receiptUpload.single('receipt'), async (req, res) =>
 router.put('/update', isAuth, receiptUpload.single('receipt'), async (req, res) => {
     try {
         const { id, amount, type, date, description, categoryId, currency } = req.body;
+
+        // Fetch the ORIGINAL transaction BEFORE editing (needed for blockchain amendment)
+        const oldTransaction = await Transaction.findOne({ _id: id, userId: req.user.id });
+
         const updateData = {
             amount: parseFloat(amount),
             currency: currency || 'USD',
@@ -152,6 +156,15 @@ router.put('/update', isAuth, receiptUpload.single('receipt'), async (req, res) 
         }
 
         await Transaction.findOneAndUpdate({ _id: id, userId: req.user.id }, updateData);
+
+        // Mine an AMENDMENT block — records before/after on-chain permanently
+        if (oldTransaction) {
+            try {
+                await addAmendmentBlock(oldTransaction, updateData, oldTransaction.blockHash);
+            } catch (blockErr) {
+                console.warn('[Blockchain] Failed to mine amendment block:', blockErr.message);
+            }
+        }
 
         const budget = await Budget.findOne({ userId: req.user.id, categoryId: categoryId || null });
         if (budget && categoryId) {
@@ -196,7 +209,20 @@ router.put('/update', isAuth, receiptUpload.single('receipt'), async (req, res) 
 
 router.delete('/:id', isAuth, async (req, res) => {
     try {
+        // Fetch the transaction BEFORE deleting (for the deletion block snapshot)
+        const txToDelete = await Transaction.findOne({ _id: req.params.id, userId: req.user.id });
+
         await Transaction.findOneAndDelete({ _id: req.params.id, userId: req.user.id });
+
+        // Mine a DELETION block — permanent proof this transaction existed and was deleted
+        if (txToDelete) {
+            try {
+                await addDeletionBlock(txToDelete, txToDelete.blockHash);
+            } catch (blockErr) {
+                console.warn('[Blockchain] Failed to mine deletion block:', blockErr.message);
+            }
+        }
+
         res.redirect('/transactions');
     } catch (err) {
         console.error(err);
