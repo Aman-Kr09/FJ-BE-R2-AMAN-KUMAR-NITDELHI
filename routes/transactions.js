@@ -10,14 +10,34 @@ const { addTransactionBlock } = require('../services/blockchainService');
 
 const isAuth = (req, res, next) => req.isAuthenticated() ? next() : res.redirect('/auth/login');
 
-// File upload setup
+// ── Receipt upload: memory storage → base64 data URI stored in MongoDB ──────
+// Reason: Render (and most PaaS free tiers) have EPHEMERAL disk storage.
+// Files written to ./uploads/ are wiped on every deploy/restart.
+// Storing as base64 in MongoDB means receipts survive restarts permanently.
+const receiptUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB max
+    fileFilter: (req, file, cb) => {
+        const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
+        if (allowed.includes(file.mimetype)) cb(null, true);
+        else cb(new Error('Only images (JPEG/PNG/GIF/WebP) and PDFs allowed for receipts'), false);
+    }
+});
+
+// ── Statement import: disk storage (temp file, parsed then discarded) ─────────
 const storage = multer.diskStorage({
     destination: './uploads/',
     filename: (req, file, cb) => {
-        cb(null, 'receipt-' + Date.now() + path.extname(file.originalname));
+        cb(null, 'stmt-' + Date.now() + path.extname(file.originalname));
     }
 });
 const upload = multer({ storage });
+
+// Helper: convert multer memory buffer to base64 data URI
+function bufferToDataUri(file) {
+    if (!file) return null;
+    return `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+}
 
 router.get('/', isAuth, async (req, res) => {
     try {
@@ -48,10 +68,11 @@ router.get('/', isAuth, async (req, res) => {
     }
 });
 
-router.post('/add', isAuth, upload.single('receipt'), async (req, res) => {
+router.post('/add', isAuth, receiptUpload.single('receipt'), async (req, res) => {
     try {
         const { amount, type, date, description, categoryId, currency } = req.body;
-        const receiptUrl = req.file ? `/uploads/${req.file.filename}` : null;
+        // Store receipt as base64 data URI in MongoDB (survives Render restarts)
+        const receiptUrl = bufferToDataUri(req.file);
 
         const transaction = await Transaction.create({
             amount: parseFloat(amount),
@@ -113,7 +134,7 @@ router.post('/add', isAuth, upload.single('receipt'), async (req, res) => {
     }
 });
 
-router.put('/update', isAuth, upload.single('receipt'), async (req, res) => {
+router.put('/update', isAuth, receiptUpload.single('receipt'), async (req, res) => {
     try {
         const { id, amount, type, date, description, categoryId, currency } = req.body;
         const updateData = {
@@ -126,7 +147,8 @@ router.put('/update', isAuth, upload.single('receipt'), async (req, res) => {
         };
 
         if (req.file) {
-            updateData.receiptUrl = `/uploads/${req.file.filename}`;
+            // Store new receipt as base64 data URI
+            updateData.receiptUrl = bufferToDataUri(req.file);
         }
 
         await Transaction.findOneAndUpdate({ _id: id, userId: req.user.id }, updateData);

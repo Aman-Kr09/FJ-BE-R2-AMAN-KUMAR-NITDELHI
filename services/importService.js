@@ -77,8 +77,12 @@ const parseCSV = (filePath, userCurrency = 'USD') => {
     return new Promise((resolve, reject) => {
         try {
             let content = fs.readFileSync(filePath, 'utf-8');
+            // Strip BOM
             if (content.charCodeAt(0) === 0xFEFF) content = content.slice(1);
+            // Normalize line endings
+            content = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
+            // ── Auto-detect delimiter ────────────────────────────────────────
             const firstLine = content.split('\n')[0];
             const counts = {
                 ',':  (firstLine.match(/,/g)  || []).length,
@@ -96,17 +100,26 @@ const parseCSV = (filePath, userCurrency = 'USD') => {
 
             if (!parsed.data || parsed.data.length === 0) return resolve([]);
 
+            // ── Find the header row ──────────────────────────────────────────
+            // Broad list of keywords that ANY bank header would contain (lower threshold = 1)
             const headerKeywords = [
-                'date','value date','posting date','transaction date',
-                'amount','debit','credit','withdrawal','deposit',
-                'description','particulars','narration','details','remarks',
+                'date','value date','posting date','transaction date','tran date','trans date',
+                'value dt','txn date','sl.no',
+                'amount','debit','credit','withdrawal','deposit','dr','cr',
+                'debit amount','credit amount','withdrawal amt','deposit amt',
+                'description','particulars','narration','details','remarks','memo',
+                'transaction details','trans desc','narrative','cheque no','chq/ref',
+                'balance','closing balance',
             ];
             let headerRowIdx = 0;
-            for (let i = 0; i < Math.min(parsed.data.length, 20); i++) {
+            for (let i = 0; i < Math.min(parsed.data.length, 30); i++) {
                 const row = parsed.data[i];
                 const cells = row.map(c => (c || '').toString().toLowerCase().trim());
-                if (headerKeywords.filter(kw => cells.some(c => c.includes(kw))).length >= 2) {
-                    headerRowIdx = i; break;
+                // Lower threshold to 1 — if ANY cell matches a known header keyword, it's the header
+                const matchCount = headerKeywords.filter(kw => cells.some(c => c === kw || c.includes(kw))).length;
+                if (matchCount >= 1) {
+                    headerRowIdx = i;
+                    break;
                 }
             }
 
@@ -114,28 +127,97 @@ const parseCSV = (filePath, userCurrency = 'USD') => {
             const dataRows = parsed.data.slice(headerRowIdx + 1);
             console.log(`[CSV] Header row ${headerRowIdx}:`, headers);
 
-            const dateKey   = findColumn(headers, ['date','value date','txn date','transaction date','posting date','trans date','valuedate']);
-            const descKey   = findColumn(headers, ['description','narration','particulars','remarks','details','memo','transaction details','trans desc','transaction description','narrative']);
-            const debitKey  = findColumn(headers, ['debit','withdrawal','dr','paid out','withdrawals','debit amount','withdrawal amt','debit(inr)','debit (inr)']);
-            const creditKey = findColumn(headers, ['credit','deposit','cr','paid in','deposits','credit amount','deposit amt','credit(inr)','credit (inr)']);
-            const amtKey    = findColumn(headers, ['amount','transaction amount','trans amount','amt','value','net amount']);
-            const typeKey   = findColumn(headers, ['type','transaction type','trans type','dr/cr','debit/credit']);
+            // ── Column mapping — extensive aliases for all major Indian banks ──
+            const dateKey   = findColumn(headers, [
+                'date','value date','txn date','transaction date','posting date',
+                'trans date','value dt','tran date','valuedate','sl date',
+                'transaction date(dd-mmm-yyyy)','date of transaction',
+            ]);
+            const descKey   = findColumn(headers, [
+                'description','narration','particulars','remarks','details',
+                'memo','transaction details','trans desc','transaction description',
+                'narrative','cheque details','cheque number / transaction id',
+                'transaction remarks','payee / description',
+                'transaction narration','chq/ref number','ref no./cheque no.',
+            ]);
+            const debitKey  = findColumn(headers, [
+                'debit','withdrawal','dr','paid out','withdrawals',
+                'debit amount','withdrawal amt','debit(inr)','debit (inr)',
+                'withdrawal amount','debit amt.','withdrawal amt.',
+                'debit amt','dr amount','dr amt','amount(dr)',
+                'debit amount(inr)','withdrawl amount',
+            ]);
+            const creditKey = findColumn(headers, [
+                'credit','deposit','cr','paid in','deposits',
+                'credit amount','deposit amt','credit(inr)','credit (inr)',
+                'deposit amount','credit amt.','deposit amt.',
+                'credit amt','cr amount','cr amt','amount(cr)',
+                'credit amount(inr)',
+            ]);
+            const amtKey    = findColumn(headers, [
+                'amount','transaction amount','trans amount','amt','value',
+                'net amount','transaction amt','amount (inr)', 'amount(inr)',
+                'tran amount',
+            ]);
+            const typeKey   = findColumn(headers, [
+                'type','transaction type','trans type','dr/cr','debit/credit',
+                'cr/dr','txn type','type of transaction',
+            ]);
             const catKey    = findColumn(headers, ['category','group','tag','classification']);
 
-            console.log(`[CSV] Columns → date:${dateKey} desc:${descKey} debit:${debitKey} credit:${creditKey} amt:${amtKey}`);
+            console.log(`[CSV] Columns → date:${dateKey} desc:${descKey} debit:${debitKey} credit:${creditKey} amt:${amtKey} type:${typeKey}`);
+
+            // ── Fallback: positional column guessing if headers not matched ──
+            let useFallback = false;
+            if (!dateKey && !amtKey && !debitKey && !creditKey) {
+                console.warn('[CSV] Header matching failed — attempting positional fallback');
+                useFallback = true;
+            }
 
             const transactions = [];
 
             for (const row of dataRows) {
-                const obj = {};
+                if (!row || row.length === 0) continue;
+
+                let obj = {};
+                if (useFallback) {
+                    // Build a virtual object by trying to guess columns from content
+                    const cells = row.map(c => (c || '').toString().trim());
+                    // Find a cell that looks like a date
+                    let dateVal = null, amtVal = null, descVal = null;
+                    for (const cell of cells) {
+                        if (!dateVal && normalizeDate(cell)) dateVal = cell;
+                        else if (!amtVal && /^\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?$/.test(cell.replace(/[₹$€£]/g, ''))) amtVal = cell;
+                        else if (!descVal && cell.length > 3 && isNaN(parseFloat(cell.replace(/,/g,'')))) descVal = cell;
+                    }
+                    if (!dateVal || !amtVal) continue;
+                    obj['_date'] = dateVal;
+                    obj['_amt'] = amtVal;
+                    obj['_desc'] = descVal || 'Imported Transaction';
+                    // use synthetic keys
+                    const date = normalizeDate(dateVal);
+                    if (!date) continue;
+                    const amount = Math.abs(parseAmount(amtVal));
+                    if (amount === 0) continue;
+                    transactions.push({
+                        date,
+                        description: (descVal || 'Imported Transaction').trim(),
+                        csvCategory: '',
+                        amount: parseFloat(amount.toFixed(2)),
+                        type: 'expense', // can't determine without headers
+                        currency: userCurrency,
+                    });
+                    continue;
+                }
+
                 headers.forEach((h, i) => { obj[h] = (row[i] || '').toString().trim(); });
 
                 const rawDate = dateKey ? obj[dateKey] : null;
                 const date    = normalizeDate(rawDate);
                 if (!date) continue;
 
-                const description = (descKey ? obj[descKey] : '') || 'Imported Transaction';
-                if (!description.trim()) continue;
+                const rawDesc = descKey ? obj[descKey] : '';
+                const description = rawDesc || 'Imported Transaction';
 
                 let amount = 0;
                 let type   = 'expense';
@@ -145,17 +227,26 @@ const parseCSV = (filePath, userCurrency = 'USD') => {
                 const aVal = amtKey    ? parseAmount(obj[amtKey])    : 0;
 
                 if (dVal !== 0 || cVal !== 0) {
-                    if (dVal > 0)      { amount = dVal;          type = 'expense'; }
-                    else if (cVal > 0) { amount = cVal;          type = 'income';  }
-                    else if (dVal < 0) { amount = Math.abs(dVal); type = 'income'; }
-                    else if (cVal < 0) { amount = Math.abs(cVal); type = 'expense';}
+                    if (dVal > 0)      { amount = dVal;           type = 'expense'; }
+                    else if (cVal > 0) { amount = cVal;           type = 'income';  }
+                    else if (dVal < 0) { amount = Math.abs(dVal); type = 'income';  }
+                    else if (cVal < 0) { amount = Math.abs(cVal); type = 'expense'; }
                 } else if (aVal !== 0) {
                     amount = Math.abs(aVal);
                     if (typeKey) {
-                        const tv = obj[typeKey].toLowerCase();
+                        const tv = (obj[typeKey] || '').toLowerCase();
                         type = (tv.includes('cr') || tv.includes('credit') || tv.includes('deposit') || tv.includes('income')) ? 'income' : 'expense';
                     } else {
                         type = aVal < 0 ? 'expense' : 'income';
+                    }
+                }
+
+                // Last resort: scan ALL cells for a numeric value
+                if (amount === 0) {
+                    for (const h of headers) {
+                        if (h === dateKey || h === descKey) continue;
+                        const v = parseAmount(obj[h]);
+                        if (v !== 0) { amount = Math.abs(v); break; }
                     }
                 }
 
@@ -178,6 +269,7 @@ const parseCSV = (filePath, userCurrency = 'USD') => {
         }
     });
 };
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PDF TEXT EXTRACTION
