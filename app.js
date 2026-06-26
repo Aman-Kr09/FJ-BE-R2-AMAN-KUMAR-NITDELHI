@@ -53,6 +53,7 @@ const budgetRouter = require('./routes/budgets');
 const reportRouter = require('./routes/reports');
 const categoryRouter = require('./routes/categories');
 const savingsRouter = require('./routes/savings');
+const blockchainRouter = require('./routes/blockchain');
 
 const userRouter = require('./routes/user');
 const aiRouter = require('./routes/ai');
@@ -66,6 +67,7 @@ app.use('/reports', reportRouter);
 app.use('/categories', categoryRouter);
 app.use('/savings', savingsRouter);
 app.use('/user', userRouter);
+app.use('/blockchain', blockchainRouter);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 app.get('/', (req, res) => {
@@ -76,7 +78,10 @@ app.get('/', (req, res) => {
 });
 
 // Database Connect & Server Start
-connectDB().then(() => {
+const { initBlockchain } = require('./services/blockchainService');
+
+connectDB().then(async () => {
+    await initBlockchain();
     app.listen(PORT, () => {
         console.log(`Server running on http://localhost:${PORT}`);
     });

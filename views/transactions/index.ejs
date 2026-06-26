@@ -57,6 +57,16 @@
                                                         View Receipt</a>
                                                 </div>
                                                 <% } %>
+                                            <% if (t.blockHash) { %>
+                                                <div style="margin-top: 6px;">
+                                                    <span
+                                                        title="Block Hash: <%= t.blockHash %>"
+                                                        onclick="navigator.clipboard.writeText('<%= t.blockHash %>').then(()=>{ let el=document.getElementById('bc-toast'); el.style.opacity='1'; setTimeout(()=>el.style.opacity='0',2000); })"
+                                                        style="font-size: 0.68rem; color: #22d3ee; background: rgba(34,211,238,0.1); border: 1px solid rgba(34,211,238,0.25); padding: 2px 8px; border-radius: 100px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; user-select: none;">
+                                                        ⛓ On-Chain
+                                                    </span>
+                                                </div>
+                                            <% } %>
                                 </td>
                                 <td>
                                     <div style="display: flex; gap: 10px;">
@@ -240,4 +250,10 @@
 
         lucide.createIcons();
     </script>
+
+    <!-- Blockchain copy toast -->
+    <div id="bc-toast" style="position:fixed;bottom:28px;right:28px;background:#6366f1;color:white;padding:10px 20px;border-radius:10px;font-size:0.85rem;font-weight:600;box-shadow:0 8px 24px rgba(99,102,241,0.5);opacity:0;transition:opacity 0.3s;pointer-events:none;z-index:9999;">
+        📋 Block hash copied!
+    </div>
+
     <%- include('../partials/footer') %>

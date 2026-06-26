@@ -6,6 +6,7 @@ const { Transaction, Category, Budget } = require('../models');
 const { convert } = require('../services/currencyService');
 const { sendTransactionBudgetUpdate } = require('../services/emailService');
 const { parseCSV, parsePDF, parsePDFWithAI, parsePDFWithRegex, detectDuplicates, autoCategorize } = require('../services/importService');
+const { addTransactionBlock } = require('../services/blockchainService');
 
 const isAuth = (req, res, next) => req.isAuthenticated() ? next() : res.redirect('/auth/login');
 
@@ -52,7 +53,7 @@ router.post('/add', isAuth, upload.single('receipt'), async (req, res) => {
         const { amount, type, date, description, categoryId, currency } = req.body;
         const receiptUrl = req.file ? `/uploads/${req.file.filename}` : null;
 
-        await Transaction.create({
+        const transaction = await Transaction.create({
             amount: parseFloat(amount),
             currency: currency || 'USD',
             type,
@@ -62,6 +63,14 @@ router.post('/add', isAuth, upload.single('receipt'), async (req, res) => {
             categoryId: categoryId || null,
             userId: req.user.id
         });
+
+        // Mine a blockchain block for this transaction (non-blocking on failure)
+        try {
+            const block = await addTransactionBlock(transaction);
+            await Transaction.findByIdAndUpdate(transaction._id, { blockHash: block.hash });
+        } catch (blockErr) {
+            console.warn('[Blockchain] Failed to mine block for transaction:', blockErr.message);
+        }
 
         const budget = await Budget.findOne({ userId: req.user.id, categoryId: categoryId || null });
         if (budget && categoryId) {
@@ -284,7 +293,7 @@ router.post('/import/confirm', isAuth, async (req, res) => {
         }
 
         for (const trans of toImport) {
-            await Transaction.create({
+            const newTx = await Transaction.create({
                 amount: parseFloat(trans.amount),
                 type: trans.type,
                 date: trans.date,
@@ -293,6 +302,14 @@ router.post('/import/confirm', isAuth, async (req, res) => {
                 currency: trans.currency || req.user.currency || 'USD',
                 userId: req.user.id
             });
+
+            // Mine a blockchain block for each imported transaction
+            try {
+                const block = await addTransactionBlock(newTx);
+                await Transaction.findByIdAndUpdate(newTx._id, { blockHash: block.hash });
+            } catch (blockErr) {
+                console.warn('[Blockchain] Failed to mine block for imported transaction:', blockErr.message);
+            }
         }
 
         req.flash('success', `${toImport.length} transactions imported successfully!`);
